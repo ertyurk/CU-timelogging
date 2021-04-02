@@ -22,16 +22,9 @@
 // VARIABLES
 const AIR_TABLE_KEY = `<your AIR_TABLE_KEY>`
 const CLICKUP_KEY = '<your CLICKUP_API_KEY>'
-const CLICKUP_LIST_ID = '44623749' // List path -> La3eb > LS Handover > Backlog
-
-// ALP's userID - 2533166, 
-// Arda's UserID - 3827277, 
-// Resat's UserID - 3855819,
-// Utku's UserID - 3798383,
-const CLICKUP_USER = 3606225  // Mehmet's User ID
-
-// Associated Team for Mehmet in this context its `La3eb & MEC` , team ID for `Lean Scale` (dca etc) > 1852902
-const CLICKUP_TEAMID = 2436830  
+const CLICKUP_LIST_ID = '<Your CLICKUP_LIST_ID>'
+const CLICKUP_USER = '<CLICKUP_USER>'
+const CLICKUP_TEAMID = '<CLICKUP_TEAMID>'  
 const TARGET_ORDER_STATUS = 'Blocked' 
 // Once you finalise your tests and monitorings
 // You can create tasks directly as `CLOSED`
