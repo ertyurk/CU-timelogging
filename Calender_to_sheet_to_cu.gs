@@ -1,9 +1,11 @@
-const CLICKUP_KEY = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C5:C5").getValue()
-const CLICKUP_USER = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C6:C6").getValue()
-const CLICKUP_TEAMID = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C7:C7").getValue()
-const TARGET_ORDER_STATUS = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C8:C8").getValue()
-const CLICKUP_TASKFORCE_LIST_ID = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C9:C9").getValue()
-const CLICKUP_MESTORES_LIST_ID = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config").getRange("C10:C10").getValue()
+const SHEET = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
+const CLICKUP_KEY = SHEET.getRange("C5:C5").getValue()
+const CLICKUP_USER = SHEET.getRange("C6:C6").getValue()
+const CLICKUP_TEAMID = SHEET.getRange("C7:C7").getValue()
+const TARGET_ORDER_STATUS = SHEET.getRange("C8:C8").getValue()
+const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C9:C9").getValue()
+const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C10:C10").getValue()
+
 const onOpen = () => {
   var sheet = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
@@ -12,6 +14,12 @@ const onOpen = () => {
     .addItem('🚀  -  Push Time Logs', 'entryController')
     .addToUi();
 }
+
+const splitter = async () => {
+  var today = new Date()
+  console.log(today.format('d/M/Y'))
+}
+
 const entryController = async () => {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
   var resultRows = sheet.getLastRow();
@@ -50,7 +58,7 @@ const entryController = async () => {
               
               break;
             default:
-              createClickUpTask(dta, CLICKUP_TASKFORCE_LIST_ID)
+              createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
           }
         } else {
           Logger.log(`Task did not finish yet.`)
@@ -67,7 +75,10 @@ const copyMeetingsFromCalendartoGoogleSheet = async () => {
   for (var i = 0; i < events.length; i++) {
     var rel_data = await titleController(events[i].getTitle().toLowerCase());
     var duration = (new Date(events[i].getEndTime()).getTime()) - (new Date(events[i].getStartTime()).getTime())
-    var findRowByMeetingIdResult = await findRowByMeetingId(events[i].getId())
+    // if the meeting is recurring, i am not checking meeting UDID for passing it
+    var _findRowByMeetingIdResult = await findRowByMeetingId(events[i].getId())
+    let findRowByMeetingIdResult = false
+    await events[i].isRecurringEvent() == true ? (Logger.log(`${events[i].getTitle()} is recurring meeting.`)) : (findRowByMeetingIdResult = _findRowByMeetingIdResult.status)
     var result = [
       events[i].getId(),
       events[i].getTitle(), // event title
@@ -78,8 +89,8 @@ const copyMeetingsFromCalendartoGoogleSheet = async () => {
       events[i].getEndTime(),
       duration, // duration
       'Pending', // initial status
-      'Automated Timelog',
-      'Automated Timelog Note',
+      `Automated Timelog`,
+      `${events[i].getTitle()} - Automated Timelog Note`,
     ];
 
     // check whether duration time is equals to Basic Out of office timeline
@@ -91,7 +102,7 @@ const copyMeetingsFromCalendartoGoogleSheet = async () => {
         Logger.log(`Passed values => ${result}`)
         break;
       default:
-        findRowByMeetingIdResult.status == false
+        findRowByMeetingIdResult == false
           ? SpreadsheetApp.getActive().getSheetByName('entries').appendRow(result) : ''
     }
   }
