@@ -31,14 +31,13 @@ const wrapper = async () => {
       "slack_hook": target[0][2] // slack hook
     }
     await testRunner(data)
-      
+
   }
 }
 
-
 const testRunner = async (data) => {
   ['mobile', 'desktop'].forEach(async (strategy) => {
-    await getURLsFromSheet(strategy,data);
+    await getURLsFromSheet(strategy, data);
   });
 }
 
@@ -46,182 +45,163 @@ const getURLsFromSheet = async (strategy, keyData) => {
   var activeSheet = SHEET.getSheetByName('URL Pool');
   var rows = activeSheet.getLastRow();
   for (var i = 2; i <= rows; i++) {
-    var target = activeSheet.getRange(i, 2).getValue();
-    if (target.match(keyData.domain)) {
-      await getLighthouseResults(target, strategy, keyData)
+    var url = activeSheet.getRange(i, 2).getValue();
+    if (url.match(keyData.domain)) {
+      await getLighthouseResults(url, strategy, keyData)
     }
   }
 }
 
 
 const getLighthouseResults = async (url, strategy, keyData) => {
-  console.log("strategy ",strategy)
-  console.log("key data: ", keyData)
-  
+
   const serviceUrl = `${API_URL}?url=${url}&key=${keyData.api_key}&strategy=${strategy}&category=ACCESSIBILITY&category=BEST_PRACTICES&category=PERFORMANCE&category=PWA&category=SEO`
-  var res = await UrlFetchApp.fetch(serviceUrl);
+  var res = UrlFetchApp.fetch(serviceUrl);
   var data = JSON.parse(res.getContentText());
   var header = JSON.parse(res.getResponseCode());
-  switch (header) {
-    case 404 || 500:
-      Logger.log('Something went wrong!');
-    default:
-      Logger.log(`Result retrieved for ${url} with ${strategy} strategy.`);
-      lt = data.lighthouseResult;
-      Logger.log(lt)
-      const ltMetrics = {
-        'strategy': strategy,
-        'site': keyData.domain,
-        'target': await pageIdentifierHelper(url),
-        'url': url,
-        'performance': lt.categories.performance.score * 100,
-        'accessibility': lt.categories.accessibility.score * 100,
-        'bestPractices': lt.categories["best-practices"].score * 100,
-        'seo': lt.categories.seo.score * 100,
-        'firstContentfulPaint': lt.audits['first-contentful-paint'].displayValue.slice(0,-2),
-        'speedIndex': lt.audits['speed-index'].displayValue.slice(0,-2),
-        'totalBlockingTime': lt.audits['total-blocking-time'].displayValue.slice(0,-3),
-        'firstMeaningfulPaint': lt.audits['first-meaningful-paint'].displayValue.slice(0,-2),
-        'cumulativeLayoutShift': lt.audits['cumulative-layout-shift'].displayValue,
-        'largestContentfulPaint': lt.audits['largest-contentful-paint'].displayValue.slice(0,-2),
-        'interactive': lt.audits['interactive'].displayValue.slice(0,-2),
-      }
-      // Append all Metrics to the Log sheet.
-      SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
-        [ltMetrics.strategy, 
-        ltMetrics.url, 
-        ltMetrics.performance, 
-        ltMetrics.accessibility, 
-        ltMetrics.bestPractices, 
-        ltMetrics.seo, 
-        ltMetrics.firstContentfulPaint, 
-        ltMetrics.speedIndex, 
-        ltMetrics.totalBlockingTime, 
-        ltMetrics.firstMeaningfulPaint, 
-        ltMetrics.cumulativeLayoutShift, 
-        ltMetrics.largestContentfulPaint, 
-        ltMetrics.interactive,
-        ltMetrics.site, 
-        ltMetrics.target, 
-        `${TODAY.getFullYear()}/${TODAY.getMonth()+1}/${TODAY.getDate()}`],
-      );
+  if (header != 404 || 500) {
+    Logger.log(`Result retrieved for ${serviceUrl} with ${strategy} strategy.`);
+    lt = data.lighthouseResult;
 
-      await slackNotifier(ltMetrics, keyData);
+    // Append all Metrics to the Log sheet.
+    SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
+      [strategy,
+        url,
+        lt.categories.performance.score * 100,
+        lt.categories.accessibility.score * 100,
+        lt.categories["best-practices"].score * 100,
+        lt.categories.seo.score * 100,
+        lt.audits['first-contentful-paint'].displayValue.slice(0, -2),
+        lt.audits['speed-index'].displayValue.slice(0, -2),
+        lt.audits['total-blocking-time'].displayValue.slice(0, -3),
+        lt.audits['first-meaningful-paint'].displayValue.slice(0, -2),
+        lt.audits['cumulative-layout-shift'].displayValue,
+        lt.audits['largest-contentful-paint'].displayValue.slice(0, -2),
+        lt.audits['interactive'].displayValue.slice(0, -2),
+        keyData.domain,
+        await pageIdentifierHelper(url),
+        `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`],
+    );
+
+    await slackNotifier(ltMetrics, keyData);
+  } else {
+    Logger.log('Something went wrong!');
   }
+
 }
 
 
 const slackNotifier = async (metrics, keyData) => {
   var payload = {
-	"blocks": [
-		{
-			"type": "header",
-			"text": {
-				"type": "plain_text",
-				"text": `:mega: ${await domainIdentifierHelper(metrics.url, keyData.domain)} - Performance results for ${metrics.strategy.toUpperCase()}`
-			}
-		},
-		{
-			"type": "context",
-			"elements": [
-				{
-					"text": `*${TODAY}*`,
-					"type": "mrkdwn"
-				}
-			]
-		},
-		{
-			"type": "divider"
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": `*URL:* ${metrics.url}`
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": `Performance: *${metrics.performance}*  ${await iconHelper(metrics.performance)}  `
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": `Accessibility: *${metrics.accessibility} *  ${await iconHelper(metrics.accessibility)}`
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": `Best Practices: *${metrics.bestPractices} *  ${await iconHelper(metrics.bestPractices)}  `
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": `SEO: *${metrics.seo}*  ${await iconHelper(metrics.seo)}  `
-			}
-		},
-		{
-			"type": "divider"
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "*Lighthouse Results*"
-			}
-		},
-		{
-			"type": "section",
-			"fields": [
-				{
-					"type": "plain_text",
-					"text": `First contentful Paint => ${metrics.firstContentfulPaint} s`,
-					"emoji": true
-				},
-        {
-					"type": "plain_text",
-					"text": `First Meaningful Paint => ${metrics.firstMeaningfulPaint} s`,
-					"emoji": true
-				},
-				{
-					"type": "plain_text",
-					"text": `Time to Interactive => ${metrics.interactive} s`,
-					"emoji": true
-				},
-				{
-					"type": "plain_text",
-					"text": `Speed Index => ${metrics.speedIndex} s`,
-					"emoji": true
-				},
-				{
-					"type": "plain_text",
-					"text": `Total Blocking Time => ${metrics.totalBlockingTime} ms`,
-					"emoji": true
-				},
-				{
-					"type": "plain_text",
-					"text": `Largest Contentful Paint =>  ${metrics.largestContentfulPaint} s`,
-					"emoji": true
-				},
-				{
-					"type": "plain_text",
-					"text": `Cumulative Layout Shift => ${metrics.cumulativeLayoutShift}`,
-					"emoji": true
-				}
-			]
-		},
-		{
-			"type": "divider"
-		}
-	  ]
+    "blocks": [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": `:mega: ${await domainIdentifierHelper(metrics.url, keyData.domain)} - Performance results for ${metrics.strategy.toUpperCase()}`
+        }
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "text": `*${TODAY}*`,
+            "type": "mrkdwn"
+          }
+        ]
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `*URL:* ${metrics.url}`
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `Performance: *${metrics.performance}*  ${await iconHelper(metrics.performance)}  `
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `Accessibility: *${metrics.accessibility} *  ${await iconHelper(metrics.accessibility)}`
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `Best Practices: *${metrics.bestPractices} *  ${await iconHelper(metrics.bestPractices)}  `
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `SEO: *${metrics.seo}*  ${await iconHelper(metrics.seo)}  `
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*Lighthouse Results*"
+        }
+      },
+      {
+        "type": "section",
+        "fields": [
+          {
+            "type": "plain_text",
+            "text": `First contentful Paint => ${metrics.firstContentfulPaint} s`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `First Meaningful Paint => ${metrics.firstMeaningfulPaint} s`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `Time to Interactive => ${metrics.interactive} s`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `Speed Index => ${metrics.speedIndex} s`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `Total Blocking Time => ${metrics.totalBlockingTime} ms`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `Largest Contentful Paint =>  ${metrics.largestContentfulPaint} s`,
+            "emoji": true
+          },
+          {
+            "type": "plain_text",
+            "text": `Cumulative Layout Shift => ${metrics.cumulativeLayoutShift}`,
+            "emoji": true
+          }
+        ]
+      },
+      {
+        "type": "divider"
+      }
+    ]
   };
   var options = {
     "method": "post",
@@ -237,7 +217,7 @@ const iconHelper = async (value) => {
   let icon;
   if (value > 84) {
     icon = ':large_green_circle:'
-  } else if (value > 64 && value < 85 ) {
+  } else if (value > 64 && value < 85) {
     icon = ':large_orange_circle:'
   } else {
     icon = ':large_red_square:'
@@ -247,18 +227,18 @@ const iconHelper = async (value) => {
 }
 
 
-const domainIdentifierHelper = async (url,domain) => {
+const domainIdentifierHelper = async (url, domain) => {
   var state = `Pagespeed Results - ${await pageIdentifierHelper(url)}`
   if (url.match(domain)) {
     state = `${domain.toUpperCase()} - ${await pageIdentifierHelper(url)}`;
-  } 
+  }
 
   return state;
 }
 
 const pageIdentifierHelper = async (url) => {
   let state;
-  switch(true) {
+  switch (true) {
     case /-p-/.test(url):
       state = 'PDP'
       break;
@@ -270,6 +250,3 @@ const pageIdentifierHelper = async (url) => {
   }
   return state;
 }
-
-
-
