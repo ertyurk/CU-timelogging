@@ -47,7 +47,8 @@ const getURLsFromSheet = async (strategy, keyData) => {
   for (var i = 2; i <= rows; i++) {
     var url = activeSheet.getRange(i, 2).getValue();
     if (url.match(keyData.domain)) {
-      await getLighthouseResults(url, strategy, keyData)
+      console.log(keyData.domain, strategy, url)
+      getLighthouseResults(url, strategy, keyData)
     }
   }
 }
@@ -65,7 +66,8 @@ const getLighthouseResults = async (url, strategy, keyData) => {
 
     // Append all Metrics to the Log sheet.
     SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
-      [strategy,
+      [
+        strategy,
         url,
         lt.categories.performance.score * 100,
         lt.categories.accessibility.score * 100,
@@ -80,7 +82,8 @@ const getLighthouseResults = async (url, strategy, keyData) => {
         lt.audits['interactive'].displayValue.slice(0, -2),
         keyData.domain,
         await pageIdentifierHelper(url),
-        `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`],
+        `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`
+      ],
     );
 
     await slackNotifier(ltMetrics, keyData);
