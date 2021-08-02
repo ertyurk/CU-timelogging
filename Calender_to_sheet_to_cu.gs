@@ -11,13 +11,9 @@ const onOpen = () => {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Event menu')
     .addItem('Get Calendar Entries', 'copyMeetingsFromCalendartoGoogleSheet')
-    .addItem('🚀  -  Push Time Logs', 'entryController')
+    .addItem('🚀  -  Push to Clickup', 'entryController')
+    .addItem('🗄️  -  Push to Archive', 'pushToArchive')
     .addToUi();
-}
-
-const splitter = async () => {
-  var today = new Date()
-  console.log(today.format('d/M/Y'))
 }
 
 const entryController = async () => {
@@ -26,7 +22,7 @@ const entryController = async () => {
   for (var i = 2; i <= resultRows; i++) {
     var rowValues = sheet.getRange(`A${i}:K${i}`).getValues();
     rowValues.forEach(cell => {
-      if (cell[8] == 'Pending' && cell[4] == "WORK" || cell[3]== "AWAY") {
+      if (cell[8] == 'Pending' && cell[4] == "WORK" || cell[3] == "AWAY") {
         var taskStartDate = new Date(cell[5]).getTime() / 1000;
 
         var dta = {
@@ -44,9 +40,11 @@ const entryController = async () => {
         if (today > taskStartDate) {
           switch (dta.relations) {
             case ('MESTORES'):
+              Logger.log(`Mestores case => ${dta}`)
               createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
               break;
             case ('LA3EB'):
+              Logger.log(`La3eb case => ${dta}`)
               createClickUpTask(dta, CLICKUP_TASKFORCE_LIST_ID)
               break;
             case ('LS MINSK'):
@@ -55,9 +53,9 @@ const entryController = async () => {
             case ('AWAY'):
               Logger.log('Away')
               findRowByMeetingId(dta.UDID, 'Passed')
-              
               break;
             default:
+              Logger.log(`Default case here => ${dta}`)
               createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
           }
         } else {
@@ -163,7 +161,7 @@ const titleController = async (title) => {
     default:
       data = {
         "type": "WORK",
-        "relations": "LA3EB"
+        "relations": "MESTORES"
       }
   }
 
@@ -255,4 +253,20 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
       "status": false
     }
   }
+}
+
+const pushToArchive = () => {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
+  var resultRows = sheet.getLastRow();
+  var range = sheet.getDataRange();
+  var headers = sheet.getRange(`A1:N1`).getValues();
+  for (var i = 2; i <= resultRows; i++) {
+    var rowValues = sheet.getRange(`A${i}:N${i}`).getValues();
+    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
+    SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
+  }
+  Logger.log(`All records pushed to archive`)
+  range.clearContent();
+  SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
+  Logger.log(`Entries sheet cleared!`)
 }
