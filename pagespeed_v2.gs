@@ -144,28 +144,28 @@ const slackNotifier = async (metrics, keyData) => {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `Performance: *${metrics.performance}*  ${await iconHelper(metrics.performance)}  `
+          "text": `${await iconHelper(metrics.performance)} - Performance: *${metrics.performance}*`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `Accessibility: *${metrics.accessibility} *  ${await iconHelper(metrics.accessibility)}`
+          "text": `${await iconHelper(metrics.accessibility)} - Accessibility: *${metrics.accessibility} *`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `Best Practices: *${metrics.bestPractices} *  ${await iconHelper(metrics.bestPractices)}  `
+          "text": `${await iconHelper(metrics.bestPractices)} - Best Practices: *${metrics.bestPractices}*`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `SEO: *${metrics.seo}*  ${await iconHelper(metrics.seo)}  `
+          "text": `${await iconHelper(metrics.seo)} - SEO: *${metrics.seo}*`
         }
       },
       {
@@ -240,7 +240,7 @@ const iconHelper = async (value) => {
   } else if (value > 64 && value < 85) {
     icon = ':large_orange_circle:'
   } else {
-    icon = ':large_red_square:'
+    icon = ':red_circle:'
   }
   return icon;
 }
