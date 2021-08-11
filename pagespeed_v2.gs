@@ -48,7 +48,7 @@ const getURLsFromSheet = async (strategy, keyData) => {
     var url = activeSheet.getRange(i, 2).getValue();
     if (url.match(keyData.domain)) {
       console.log(keyData.domain, strategy, url)
-      getLighthouseResults(url, strategy, keyData)
+      await getLighthouseResults(url, strategy, keyData)
     }
   }
 }
@@ -63,29 +63,46 @@ const getLighthouseResults = async (url, strategy, keyData) => {
   if (header != 404 || 500) {
     Logger.log(`Result retrieved for ${serviceUrl} with ${strategy} strategy.`);
     lt = data.lighthouseResult;
-
+    const ltMetrics = {
+        'strategy': strategy,
+        'url': url,
+        'performance': lt.categories.performance.score * 100,
+        'accessibility': lt.categories.accessibility.score * 100,
+        'bestPractices': lt.categories["best-practices"].score * 100,
+        'seo': lt.categories.seo.score * 100,
+        'firstContentfulPaint': lt.audits['first-contentful-paint'].displayValue.slice(0, -2),
+        'speedIndex': lt.audits['speed-index'].displayValue.slice(0, -2),
+        'totalBlockingTime': lt.audits['total-blocking-time'].displayValue.slice(0, -3),
+        'firstMeaningfulPaint': lt.audits['first-meaningful-paint'].displayValue.slice(0, -2),
+        'cumulativeLayoutShift': lt.audits['cumulative-layout-shift'].displayValue,
+        'largestContentfulPaint': lt.audits['largest-contentful-paint'].displayValue.slice(0, -2),
+        'interactive': lt.audits['interactive'].displayValue.slice(0, -2),
+        'domain': keyData.domain.toUpperCase(),
+        'identifier': await pageIdentifierHelper(url),
+        'today': `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`
+      }
     // Append all Metrics to the Log sheet.
     SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
       [
-        strategy,
-        url,
-        lt.categories.performance.score * 100,
-        lt.categories.accessibility.score * 100,
-        lt.categories["best-practices"].score * 100,
-        lt.categories.seo.score * 100,
-        lt.audits['first-contentful-paint'].displayValue.slice(0, -2),
-        lt.audits['speed-index'].displayValue.slice(0, -2),
-        lt.audits['total-blocking-time'].displayValue.slice(0, -3),
-        lt.audits['first-meaningful-paint'].displayValue.slice(0, -2),
-        lt.audits['cumulative-layout-shift'].displayValue,
-        lt.audits['largest-contentful-paint'].displayValue.slice(0, -2),
-        lt.audits['interactive'].displayValue.slice(0, -2),
-        keyData.domain,
-        await pageIdentifierHelper(url),
-        `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`
+        ltMetrics.strategy, 
+        ltMetrics.url, 
+        ltMetrics.performance, 
+        ltMetrics.accessibility, 
+        ltMetrics.bestPractices, 
+        ltMetrics.seo, 
+        ltMetrics.firstContentfulPaint, 
+        ltMetrics.speedIndex, 
+        ltMetrics.totalBlockingTime, 
+        ltMetrics.firstMeaningfulPaint, 
+        ltMetrics.cumulativeLayoutShift, 
+        ltMetrics.largestContentfulPaint, 
+        ltMetrics.interactive,
+        ltMetrics.domain,
+        ltMetrics.identifier,
+        ltMetrics.today
       ],
     );
-
+    Logger.log(`Slack notification sent for ${ltMetrics}`);
     await slackNotifier(ltMetrics, keyData);
   } else {
     Logger.log('Something went wrong!');
@@ -100,8 +117,8 @@ const slackNotifier = async (metrics, keyData) => {
       {
         "type": "header",
         "text": {
-          "type": "plain_text",
-          "text": `:mega: ${await domainIdentifierHelper(metrics.url, keyData.domain)} - Performance results for ${metrics.strategy.toUpperCase()}`
+          "type": "plain_text", 
+          "text": `:mega: ${metrics.domain} - ${metrics.identifier} - Performance results for ${metrics.strategy.toUpperCase()}`
         }
       },
       {
@@ -225,18 +242,7 @@ const iconHelper = async (value) => {
   } else {
     icon = ':large_red_square:'
   }
-
   return icon;
-}
-
-
-const domainIdentifierHelper = async (url, domain) => {
-  var state = `Pagespeed Results - ${await pageIdentifierHelper(url)}`
-  if (url.match(domain)) {
-    state = `${domain.toUpperCase()} - ${await pageIdentifierHelper(url)}`;
-  }
-
-  return state;
 }
 
 const pageIdentifierHelper = async (url) => {
