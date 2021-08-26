@@ -11,7 +11,7 @@ const onOpen = () => {
   var sheet = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Event menu')
-    .addItem('🗓️  -  Retrieve meetings', 'copyMeetingsFromCalendartoGoogleSheet')
+    .addItem('🗓️  -  Retrieve meetings', 'cpMeetFromCalToSheet')
     .addItem('🚀  -  Push to Clickup', 'entryController')
     .addItem('🗄️  -  Push to Archive', 'pushToArchive')
     .addToUi();
@@ -68,7 +68,7 @@ const entryController = async () => {
   }
 }
 
-const copyMeetingsFromCalendartoGoogleSheet = async () => {
+const cpMeetFromCalToSheet = async () => {
   var today = new Date();
   var events = CalendarApp.getDefaultCalendar().getEventsForDay(today);
   Logger.log('Number of events: ' + events.length);
