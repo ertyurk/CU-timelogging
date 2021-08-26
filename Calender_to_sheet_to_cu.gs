@@ -10,7 +10,7 @@ const onOpen = () => {
   var sheet = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Event menu')
-    .addItem('Get Calendar Entries', 'copyMeetingsFromCalendartoGoogleSheet')
+    .addItem('🗓️  -  Retrieve meetings', 'copyMeetingsFromCalendartoGoogleSheet')
     .addItem('🚀  -  Push to Clickup', 'entryController')
     .addItem('🗄️  -  Push to Archive', 'pushToArchive')
     .addToUi();
@@ -106,6 +106,120 @@ const copyMeetingsFromCalendartoGoogleSheet = async () => {
   }
 }
 
+const createClickUpTask = async (dta, list_id) => {
+  
+  didTaskCreated = await isTaskCreated(dta.taskName)
+
+  if (didTaskCreated.status == true) {
+    Logger.log(`Meeting ${dta.taskName} already has a task ${didTaskCreated.task}`)
+    return createTimeEntry(didTaskCreated.task, dta)
+
+  } else {
+
+    Logger.log(`${dta.taskName} will be created for the timelog as CLOSED`)
+    var url = `https://api.clickup.com/api/v2/list/${list_id}/task`
+    var payload = {
+      "name": dta.taskName,
+      "description": dta.taskDescription,
+      "tags": [dta.tag],
+      "status": TARGET_ORDER_STATUS
+    }
+
+    var params = {
+      'method': 'POST',
+      'muteHttpExceptions': true,
+      'contentType': 'application/json',
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": CLICKUP_KEY
+      }, "payload": JSON.stringify(payload)
+    };
+
+    var res = await UrlFetchApp.fetch(url, params);
+    var data = JSON.parse(res.getContentText());
+    var header = JSON.parse(res.getResponseCode());
+    switch (header) {
+      case 404 || 500:
+        Logger.log('Task creation failed')
+      default:
+        await createTimeEntry(data.id, dta)
+    }
+  }
+}
+
+const createTimeEntry = async (taskID, dta) => {
+  var url = `https://api.clickup.com/api/v2/team/${CLICKUP_TEAMID}/time_entries`
+  var payload = {
+    "description": dta.time_log_note,
+    "start": dta.dateEpoch * 1000,
+    "billable": true,
+    "duration": dta.duration,
+    "assignee": CLICKUP_USER,
+    "tid": taskID
+  }
+  
+  var params = {
+    'method': 'POST',
+    'muteHttpExceptions': true,
+    'contentType': 'application/json',
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": CLICKUP_KEY
+    }, "payload": JSON.stringify(payload)
+  };
+
+  var res = await UrlFetchApp.fetch(url, params);
+  var data = JSON.parse(res.getResponseCode());
+  
+  switch (data) {
+    case 200:
+      Logger.log(`Duration time entried to the Clickup for ${dta.taskName}`)
+      await findRowByMeetingId(dta.UDID, 'Success', taskID)
+      break;
+    case 404 || 500:
+      Logger.log('Time Entry failed')
+      await findRowByMeetingId(dta.UDID, 'Failed', taskID)
+      break;
+    default:
+      Logger.log(data)
+      await findRowByMeetingId(dta.UDID, 'ERROR', taskID)
+  }
+}
+
+// Time log status is optional here to update timelogstatus' value
+const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
+  try {
+    var sheet = SpreadsheetApp.getActive().getSheetByName('entries');
+    var indexById = sheet.createTextFinder(id).findNext().getRowIndex();
+    timeLogStatus ? sheet.getRange(`I${indexById}`).setValue(timeLogStatus) : '';
+    taskID ? sheet.getRange(`L${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`) : '';
+    return {
+      "status": true
+    }
+
+  } catch (err) {
+    return {
+      "status": false
+    }
+  }
+}
+
+const pushToArchive = () => {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
+  var resultRows = sheet.getLastRow();
+  var range = sheet.getDataRange();
+  var headers = sheet.getRange(`A1:N1`).getValues();
+  for (var i = 2; i <= resultRows; i++) {
+    var rowValues = sheet.getRange(`A${i}:N${i}`).getValues();
+    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
+    SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
+  }
+  Logger.log(`All records pushed to archive`)
+  range.clearContent();
+  SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
+  Logger.log(`Entries sheet cleared!`)
+}
+
 const titleController = async (title) => {
 
   /*
@@ -168,105 +282,25 @@ const titleController = async (title) => {
   return data;
 }
 
-const createClickUpTask = async (dta, list_id) => {
-  Logger.log(`${dta.taskName} will be created for the timelog as CLOSED`)
-  var url = `https://api.clickup.com/api/v2/list/${list_id}/task`
-  var payload = {
-    "name": dta.taskName,
-    "description": dta.taskDescription,
-    "tags": [dta.tag],
-    "status": TARGET_ORDER_STATUS
+const isTaskCreated = async (text) => {
+  // Try to find Task id and space from the title with regexp
+  result = /#([a-zA-Z0-9]+)-([a-zA-Z0-9]+)/.exec(text)
+  // if there is no space, try to catch only taskid
+  if (result == null) {
+    result = /#([a-zA-Z0-9]+)/.exec(text)
   }
-
-  var params = {
-    'method': 'POST',
-    'muteHttpExceptions': true,
-    'contentType': 'application/json',
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": CLICKUP_KEY
-    }, "payload": JSON.stringify(payload)
-  };
-
-  var res = await UrlFetchApp.fetch(url, params);
-  var data = JSON.parse(res.getContentText());
-  var header = JSON.parse(res.getResponseCode());
-  switch (header) {
-    case 404 || 500:
-      Logger.log('Task creation failed')
-    default:
-      await createTimeEntry(data.id, dta)
-  }
-
-}
-
-const createTimeEntry = async (taskID, dta) => {
-  var url = `https://api.clickup.com/api/v2/team/${CLICKUP_TEAMID}/time_entries`
-  var payload = {
-    "description": dta.time_log_note,
-    "start": dta.dateEpoch * 1000,
-    "billable": true,
-    "duration": dta.duration,
-    "assignee": CLICKUP_USER,
-    "tid": taskID
-  }
-  var params = {
-    'method': 'POST',
-    'muteHttpExceptions': true,
-    'contentType': 'application/json',
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": CLICKUP_KEY
-    }, "payload": JSON.stringify(payload)
-  };
-
-  var res = await UrlFetchApp.fetch(url, params);
-  var data = JSON.parse(res.getResponseCode());
-  switch (data) {
-    case 200:
-      Logger.log(`Duration time entried to the Clickup for ${dta.taskName}`)
-      await findRowByMeetingId(dta.UDID, 'Success', taskID)
-      break;
-    case 404 || 500:
-      Logger.log('Time Entry failed')
-      await findRowByMeetingId(dta.UDID, 'Failed', taskID)
-      break;
-    default:
-      Logger.log(data)
-      await findRowByMeetingId(dta.UDID, 'ERROR', taskID)
-  }
-}
-
-// Time log status is optional here to update timelogstatus' value
-const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
-  try {
-    var sheet = SpreadsheetApp.getActive().getSheetByName('entries');
-    var indexById = sheet.createTextFinder(id).findNext().getRowIndex();
-    timeLogStatus ? sheet.getRange(`I${indexById}`).setValue(timeLogStatus) : '';
-    taskID ? sheet.getRange(`L${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`) : '';
+  
+  // finally, return true or false according to the task id
+  if (result != null) {
     return {
-      "status": true
+      "status": true,
+      "task":result[1],
+      "space": result[2] ? result[2] : false
     }
-
-  } catch (err) {
+  } else {
     return {
       "status": false
     }
   }
-}
 
-const pushToArchive = () => {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
-  var resultRows = sheet.getLastRow();
-  var range = sheet.getDataRange();
-  var headers = sheet.getRange(`A1:N1`).getValues();
-  for (var i = 2; i <= resultRows; i++) {
-    var rowValues = sheet.getRange(`A${i}:N${i}`).getValues();
-    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
-    SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
-  }
-  Logger.log(`All records pushed to archive`)
-  range.clearContent();
-  SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
-  Logger.log(`Entries sheet cleared!`)
 }
