@@ -1,10 +1,11 @@
 const SHEET = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
 const CLICKUP_KEY = SHEET.getRange("C5:C5").getValue()
 const CLICKUP_USER = SHEET.getRange("C6:C6").getValue()
-const CLICKUP_TEAMID = SHEET.getRange("C7:C7").getValue()
-const TARGET_ORDER_STATUS = SHEET.getRange("C8:C8").getValue()
-const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C9:C9").getValue()
-const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C10:C10").getValue()
+const CLICKUP_TEAMID_MECL = SHEET.getRange("C7:C7").getValue()
+const CLICKUP_TEAMID_LS = SHEET.getRange("C8:C8").getValue()
+const TARGET_ORDER_STATUS = SHEET.getRange("C9:C9").getValue()
+const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C10:C10").getValue()
+const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C11:C11").getValue()
 
 const onOpen = () => {
   var sheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -22,7 +23,7 @@ const entryController = async () => {
   for (var i = 2; i <= resultRows; i++) {
     var rowValues = sheet.getRange(`A${i}:K${i}`).getValues();
     rowValues.forEach(cell => {
-      if (cell[8] == 'Pending' && cell[4] == "WORK" || cell[3] == "AWAY") {
+      if (cell[8] == 'AUTH' || cell[8] == 'Pending' && cell[4] == "WORK" || cell[3] == "AWAY") {
         var taskStartDate = new Date(cell[5]).getTime() / 1000;
 
         var dta = {
@@ -33,18 +34,19 @@ const entryController = async () => {
           "UDID": cell[0],
           "relations": cell[3],
           "tag": cell[9],
-          'time_log_note': cell[10]
+          'time_log_note': cell[10],
+          'time_log_status': cell[8]
         }
 
         var today = new Date().getTime() / 1000;
         if (today > taskStartDate) {
           switch (dta.relations) {
             case ('MESTORES'):
-              Logger.log(`Mestores case => ${dta}`)
+              Logger.log(`Mestores case => ${dta.taskName}`)
               createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
               break;
             case ('LA3EB'):
-              Logger.log(`La3eb case => ${dta}`)
+              Logger.log(`La3eb case => ${dta.taskName}`)
               createClickUpTask(dta, CLICKUP_TASKFORCE_LIST_ID)
               break;
             case ('LS MINSK'):
@@ -55,7 +57,7 @@ const entryController = async () => {
               findRowByMeetingId(dta.UDID, 'Passed')
               break;
             default:
-              Logger.log(`Default case here => ${dta}`)
+              Logger.log(`Default case here => ${dta.taskName}`)
               createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
           }
         } else {
@@ -107,15 +109,11 @@ const copyMeetingsFromCalendartoGoogleSheet = async () => {
 }
 
 const createClickUpTask = async (dta, list_id) => {
-  
   didTaskCreated = await isTaskCreated(dta.taskName)
-
-  if (didTaskCreated.status == true) {
-    Logger.log(`Meeting ${dta.taskName} already has a task ${didTaskCreated.task}`)
-    return createTimeEntry(didTaskCreated.task, dta)
-
-  } else {
-
+  console.log(dta)
+  console.log(didTaskCreated)
+  if (didTaskCreated.status == false || dta.time_log_status == "AUTH") {
+    // create the task
     Logger.log(`${dta.taskName} will be created for the timelog as CLOSED`)
     var url = `https://api.clickup.com/api/v2/list/${list_id}/task`
     var payload = {
@@ -135,20 +133,39 @@ const createClickUpTask = async (dta, list_id) => {
       }, "payload": JSON.stringify(payload)
     };
 
-    var res = await UrlFetchApp.fetch(url, params);
+    var res = UrlFetchApp.fetch(url, params);
     var data = JSON.parse(res.getContentText());
     var header = JSON.parse(res.getResponseCode());
+    console.log(res, header, data)
     switch (header) {
       case 404 || 500:
         Logger.log('Task creation failed')
       default:
         await createTimeEntry(data.id, dta)
     }
+  } else {
+    Logger.log(`${dta.taskName} looks created already.`)
+    await createTimeEntry(didTaskCreated.task, dta, didTaskCreated)
   }
+
 }
 
-const createTimeEntry = async (taskID, dta) => {
-  var url = `https://api.clickup.com/api/v2/team/${CLICKUP_TEAMID}/time_entries`
+
+const createTimeEntry = async (taskID, dta, didTaskCreated = {}) => {
+  var spaceRelatedTeamID = CLICKUP_TEAMID_MECL // base
+
+  if (didTaskCreated.space) {
+    switch (didTaskCreated.space) {
+      case "LS":
+        Loggler.log("Team ID settled as LS")
+        spaceRelatedTeamID = CLICKUP_TEAMID_LS
+        break;
+      default:
+        Loggler.log("Team ID settled as MECL")
+        spaceRelatedTeamID = CLICKUP_TEAMID_MECL
+    }
+  }
+  var url = `https://api.clickup.com/api/v2/team/${spaceRelatedTeamID}/time_entries`
   var payload = {
     "description": dta.time_log_note,
     "start": dta.dateEpoch * 1000,
@@ -157,7 +174,7 @@ const createTimeEntry = async (taskID, dta) => {
     "assignee": CLICKUP_USER,
     "tid": taskID
   }
-  
+
   var params = {
     'method': 'POST',
     'muteHttpExceptions': true,
@@ -170,7 +187,6 @@ const createTimeEntry = async (taskID, dta) => {
 
   var res = await UrlFetchApp.fetch(url, params);
   var data = JSON.parse(res.getResponseCode());
-  
   switch (data) {
     case 200:
       Logger.log(`Duration time entried to the Clickup for ${dta.taskName}`)
@@ -179,6 +195,10 @@ const createTimeEntry = async (taskID, dta) => {
     case 404 || 500:
       Logger.log('Time Entry failed')
       await findRowByMeetingId(dta.UDID, 'Failed', taskID)
+      break;
+    case 400:
+      Logger.log('Access error')
+      await findRowByMeetingId(dta.UDID, 'AUTH', taskID)
       break;
     default:
       Logger.log(data)
@@ -283,18 +303,19 @@ const titleController = async (title) => {
 }
 
 const isTaskCreated = async (text) => {
+
   // Try to find Task id and space from the title with regexp
   result = /#([a-zA-Z0-9]+)-([a-zA-Z0-9]+)/.exec(text)
   // if there is no space, try to catch only taskid
   if (result == null) {
     result = /#([a-zA-Z0-9]+)/.exec(text)
   }
-  
+
   // finally, return true or false according to the task id
   if (result != null) {
     return {
       "status": true,
-      "task":result[1],
+      "task": result[1],
       "space": result[2] ? result[2] : false
     }
   } else {
