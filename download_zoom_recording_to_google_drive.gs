@@ -35,26 +35,26 @@ const retrieveMeetingsFromZoom = async () => {
 
   var res = UrlFetchApp.fetch(url, params);
   var data = JSON.parse(res.getContentText());
+  data.meetings.length 
+    ? data.meetings.forEach(async meeting => {
+      var meeting_id = meeting.id; // set meeting id for deleting later.
+      var meeting_name = meeting.topic;
+      var meeting_date = meeting.start_time;
 
-  data.meetings.forEach(async meeting => {
-    var meeting_id = meeting.id; // set meeting id for deleting later.
-    var meeting_name = meeting.topic;
-    var meeting_date = meeting.start_time;
-
-    meeting.recording_files.forEach(async recording => {
-      if (recording.file_type == "MP4" && recording.status == 'completed') {
-        var folder_name = `${meeting_date.slice(0, 10)} ${meeting_name}`.replace(/ /gm, "_")
-        Logger.log(`Meeting: ${meeting_name} is uploading...`)
-        var file_name = `${folder_name}.${recording.file_extension}`
-        await moveRecording(folder_name, file_name, recording.download_url, meeting_id)
-      } else {
-        recording.status == 'completed' 
-          ? Logger.log(`${meeting_name}'s ${recording.file_extension} recording is passed.`) 
-          : Logger.log(`${meeting_name} is not processed yet.`)
-      }
+      meeting.recording_files.forEach(async recording => {
+        if (recording.file_type == "MP4" && recording.status == 'completed') {
+          var folder_name = `${meeting_date.slice(0, 10)} ${meeting_name}`.replace(/ /gm, "_")
+          Logger.log(`Meeting: ${meeting_name} is uploading...`)
+          var file_name = `${folder_name}.${recording.file_extension}`
+          await moveRecording(folder_name, file_name, recording.download_url, meeting_id)
+        } else {
+          recording.status == 'completed' 
+            ? Logger.log(`${meeting_name}'s ${recording.file_extension} recording is passed.`) 
+            : Logger.log(`${meeting_name} is not processed yet.`)
+        }
+      })
     })
-  })
-
+    : Logger.log(`There is no meeting recorded.`)
 }
 
 const moveRecording = async (folder_name, file_name, download_url, meeting_id) => {
