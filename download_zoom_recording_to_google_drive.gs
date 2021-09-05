@@ -9,9 +9,14 @@
  *  - Create a JWT and set jwt token expiry as per your need like 
  *    in the image: https://drive.google.com/file/d/181AUoYFZix_36qdsmoyeUH9vegYkhQKR/view?usp=sharing
  *  - Find your Zoom User ID
+ * 
+ * How to run:
  *  - Once the constants mentioned below are provided, you can set Google Apps Script triggers like 
  *    in the image: https://drive.google.com/file/d/1f4_Lj81WgsMTO6FU5ZiUB69OVQKsfN-a/view?usp=sharing
- *
+ *  - Once you run, the script will review all the meetings from UserID. 
+ *  - If the meeting recording processing is finished, it uploads that recording only 
+ *  - to the corresponding folder. 
+ *  - Folder Hierarchy: FOLDER > YEAR > MONTH > Recording Folder > Meeting record file
 */
 
 const TOKEN = <YOUR ZOOM TOKEN HERE>
