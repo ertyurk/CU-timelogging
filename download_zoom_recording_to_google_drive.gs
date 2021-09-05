@@ -49,8 +49,8 @@ const retrieveMeetingsFromZoom = async () => {
         await moveRecording(folder_name, file_name, recording.download_url, meeting_id)
       } else {
         recording.status == 'completed' 
-          ? Logger.log(`${meeting_name} is in ${recording.status} with ${recording.file_extension}.`) 
-          : Logger.log(`${meeting_name} Sound recording passed.`)
+          ? Logger.log(`${meeting_name}'s ${recording.file_extension} recording is passed.`) 
+          : Logger.log(`${meeting_name} is not processed yet.`)
       }
     })
   })
