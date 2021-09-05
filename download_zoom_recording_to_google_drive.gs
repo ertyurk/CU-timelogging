@@ -80,39 +80,39 @@ const folderManager = async (target) => {
   const create = (new_folder, target_folder) => DriveApp
     .getFolderById(new_folder)
     .createFolder(target_folder).getId();
-  
+
   const folderFinder = async (search_key, folder = FOLDER) => {
     var main = DriveApp.getFolderById(folder).getFolders();
     while (main.hasNext()) {
       var sub = main.next();
-      return sub.getName() == search_key ? result = sub.getId() : result = false;
+      return sub.getName() == search_key ? result = sub.getId() : result = null;
     }
   }
+
   var find_year = await folderFinder(target.slice(0, 4));
-  if (find_year == false) {
-    Logger.log(`Year not found ${find_year}`);
-    
+
+  if (!find_year) {
+    console.log(`Year not found ${find_year}`);
     var new_year = create(FOLDER, target.slice(0, 4));
-    Logger.log(`New year created ${new_year}`);
-    
+    console.log(`New year created ${new_year}`);
+
     var new_month = create(new_year, target.slice(5, 7));
-    Logger.log(`New month created ${new_month}`);
-    
+    console.log(`New month created ${new_month}`);
+
     return new_month;
   } else {
-    Logger.log(`year found ${find_year}`);
+    console.log(`year found ${find_year}`);
     var find_month = await folderFinder(target.slice(5, 7), find_year);
-    
-    if (find_month == false) {
-      Logger.log(`find month not found ${find_month}`);
-      
+
+    if (!find_month) {
+      console.log(`find month not found ${find_month}`);
       var new_month = create(find_year, target.slice(5, 7));
-      Logger.log(`New month created ${new_month}`);
-      
+      console.log(`New month created ${new_month}`);
+
       return new_month;
     } else {
-      Logger.log(`Month found ${find_month}`);
-      
+      console.log(`Month found ${find_month}`);
+
       return find_month;
     }
   }
