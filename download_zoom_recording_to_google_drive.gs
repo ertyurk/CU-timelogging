@@ -23,8 +23,9 @@ const ZOOM_URL = 'https://api.zoom.us/v2'
 const retrieveMeetingsFromZoom = async () => {
   var url = ZOOM_URL + '/users/' + USER_ID + '/recordings';
 
-    var params = {
+  var params = {
     'method': 'GET',
+    'muteHttpExceptions': true,
     'contentType': 'application/json',
     "headers": {
       "Content-Type": "application/json",
@@ -35,7 +36,7 @@ const retrieveMeetingsFromZoom = async () => {
 
   var res = UrlFetchApp.fetch(url, params);
   var data = JSON.parse(res.getContentText());
-  data.meetings.length 
+  data.meetings.length
     ? data.meetings.forEach(async meeting => {
       var meeting_id = meeting.id; // set meeting id for deleting later.
       var meeting_name = meeting.topic;
@@ -43,29 +44,74 @@ const retrieveMeetingsFromZoom = async () => {
 
       meeting.recording_files.forEach(async recording => {
         if (recording.file_type == "MP4" && recording.status == 'completed') {
-          var folder_name = `${meeting_date.slice(0, 10)} ${meeting_name}`.replace(/ /gm, "_")
-          Logger.log(`Meeting: ${meeting_name} is uploading...`)
-          var file_name = `${folder_name}.${recording.file_extension}`
-          await moveRecording(folder_name, file_name, recording.download_url, meeting_id)
+          var folder_name = `${meeting_date.slice(0, 10)} ${meeting_name}`.replace(/ /gm, "_");
+          Logger.log(`Meeting: ${meeting_name} is uploading...`);
+          var file_name = `${folder_name}.${recording.file_extension}`;
+          await moveRecording(folder_name, file_name, recording.download_url, meeting_id);
         } else {
-          recording.status == 'completed' 
-            ? Logger.log(`${meeting_name}'s ${recording.file_extension} recording is passed.`) 
+          recording.status == 'completed'
+            ? Logger.log(`${meeting_name}'s ${recording.file_extension} recording is passed.`)
             : Logger.log(`${meeting_name} is not processed yet.`)
         }
       })
     })
-    : Logger.log(`There is no meeting recorded.`)
+    : Logger.log(`There is no meeting recorded.`);
 }
 
 const moveRecording = async (folder_name, file_name, download_url, meeting_id) => {
-  var new_folder = await DriveApp.getFolderById(FOLDER).createFolder(folder_name).getId()
-  Logger.log(`Folder: ${folder_name} created.`)
-  var video = UrlFetchApp.fetch(download_url)
-  await DriveApp.getFolderById(new_folder).createFile(video.getBlob()).setName(file_name)
-  Logger.log(`Recording: ${file_name} uploaded.\n Starting to remove zoom cloud recording.`)
-  await deleteRecordingFromZoom(meeting_id)
+  var target_folder = await folderManager(folder_name);
+  var new_folder = DriveApp.getFolderById(target_folder).createFolder(folder_name).getId();
+  Logger.log(`Folder: ${folder_name} created.`);
+
+  var video = UrlFetchApp.fetch(download_url);
+  await DriveApp.getFolderById(new_folder).createFile(video.getBlob()).setName(file_name);
+  Logger.log(`Recording: ${file_name} is uploaded.\nStarting to remove zoom cloud recording.`);
+
+  await deleteRecordingFromZoom(meeting_id);
 }
 
+const folderManager = async (target) => {
+  // folder creator
+  const create = (new_folder, target_folder) => DriveApp
+    .getFolderById(new_folder)
+    .createFolder(target_folder).getId();
+  
+  const folderFinder = async (search_key, folder = FOLDER) => {
+    var main = DriveApp.getFolderById(folder).getFolders();
+    while (main.hasNext()) {
+      var sub = main.next();
+      return sub.getName() == search_key ? result = sub.getId() : result = false;
+    }
+  }
+  var find_year = await folderFinder(target.slice(0, 4));
+  if (find_year == false) {
+    Logger.log(`Year not found ${find_year}`);
+    
+    var new_year = create(FOLDER, target.slice(0, 4));
+    Logger.log(`New year created ${new_year}`);
+    
+    var new_month = create(new_year, target.slice(5, 7));
+    Logger.log(`New month created ${new_month}`);
+    
+    return new_month;
+  } else {
+    Logger.log(`year found ${find_year}`);
+    var find_month = await folderFinder(target.slice(5, 7), find_year);
+    
+    if (find_month == false) {
+      Logger.log(`find month not found ${find_month}`);
+      
+      var new_month = create(find_year, target.slice(5, 7));
+      Logger.log(`New month created ${new_month}`);
+      
+      return new_month;
+    } else {
+      Logger.log(`Month found ${find_month}`);
+      
+      return find_month;
+    }
+  }
+}
 
 const deleteRecordingFromZoom = async (meeting_id) => {
   var url = ZOOM_URL + '/meetings/' + meeting_id + '/recordings';
@@ -100,6 +146,5 @@ const deleteRecordingFromZoom = async (meeting_id) => {
       Logger.log(`Deleting faced an unknown Error ${res}, ${data}`)
   }
 }
-
 
 
