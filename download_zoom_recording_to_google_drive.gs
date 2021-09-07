@@ -90,7 +90,7 @@ const moveRecording = async (folder_name, file_name, download_url, meeting_id) =
 
   Logger.log(`Recording: ${file_name} is uploaded.\nStarting to remove zoom cloud recording.`);
   slackNotifier(url, folder_name)
-  //shareToPeople(folder_name, new_folder)
+  shareToPeople(folder_name, new_folder)
   await deleteRecordingFromZoom(meeting_id);
 }
 
