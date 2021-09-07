@@ -46,6 +46,7 @@ const PARAMS = {
   }
 };
 
+
 const retrieveMeetingsFromZoom = async () => {
   var url = ZOOM_URL + '/users/' + USER_ID + '/recordings';
   var res = UrlFetchApp.fetch(url, PARAMS);
@@ -81,7 +82,7 @@ const moveRecording = async (folder_name, file_name, download_url, meeting_id) =
     .getId();
   Logger.log(`Folder: ${folder_name} created.`);
 
-  var video = UrlFetchApp.fetch(download_url, PARAMS);
+  var video = UrlFetchApp.fetch(download_url);
   var url = await DriveApp
     .getFolderById(new_folder)
     .createFile(video.getBlob())
@@ -89,7 +90,7 @@ const moveRecording = async (folder_name, file_name, download_url, meeting_id) =
 
   Logger.log(`Recording: ${file_name} is uploaded.\nStarting to remove zoom cloud recording.`);
   slackNotifier(url, folder_name)
-  shareToPeople(folder_name, new_folder)
+  //shareToPeople(folder_name, new_folder)
   await deleteRecordingFromZoom(meeting_id);
 }
 
@@ -173,8 +174,17 @@ const folderManager = async (target) => {
 
 const deleteRecordingFromZoom = async (meeting_id) => {
   var url = ZOOM_URL + '/meetings/' + meeting_id + '/recordings';
-
-  var res = UrlFetchApp.fetch(url, PARAMS.method = 'DELETE');
+  var params = {
+    'method': 'DELETE',
+    'muteHttpExceptions': true,
+    'contentType': 'application/json',
+    "headers": {
+      "Content-Type": "application/json",
+      'User-Agent': 'Zoom-Jwt-Request',
+      "Authorization": `Bearer ${TOKEN}`
+    }
+  };
+  var res = UrlFetchApp.fetch(url, params);
   var data = JSON.parse(res.getResponseCode());
   switch (data) {
     case 204:
