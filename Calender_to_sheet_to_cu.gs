@@ -6,11 +6,10 @@ const CLICKUP_TEAMID_LS = SHEET.getRange("C8:C8").getValue()
 const TARGET_ORDER_STATUS = SHEET.getRange("C9:C9").getValue()
 const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C10:C10").getValue()
 const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C11:C11").getValue()
+const CLICKUP_LS_LISTID = SHEET.getRange("C12:C12").getValue()
 
 const onOpen = () => {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet();
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('Event menu')
+  SpreadsheetApp.getUi().createMenu('Event menu')
     .addItem('🗓️  -  Retrieve meetings', 'cpMeetFromCalToSheet')
     .addItem('🚀  -  Push to Clickup', 'entryController')
     .addItem('🗄️  -  Push to Archive', 'pushToArchive')
@@ -55,6 +54,10 @@ const entryController = async () => {
             case ('AWAY'):
               Logger.log('Away')
               findRowByMeetingId(dta.UDID, 'Passed')
+              break;
+            case ('LS'):
+              Logger.log(`Leanscale case => ${dta.taskName}`)
+              createClickUpTask(dta, CLICKUP_LS_LISTID, 'LS')
               break;
             default:
               Logger.log(`Default case here => ${dta.taskName}`)
@@ -108,10 +111,8 @@ const cpMeetFromCalToSheet = async () => {
   }
 }
 
-const createClickUpTask = async (dta, list_id) => {
+const createClickUpTask = async (dta, list_id, space = 'MECL') => {
   didTaskCreated = await isTaskCreated(dta.taskName)
-  console.log(dta)
-  console.log(didTaskCreated)
   if (didTaskCreated.status == false || dta.time_log_status == "AUTH") {
     // create the task
     Logger.log(`${dta.taskName} will be created for the timelog as CLOSED`)
@@ -136,36 +137,26 @@ const createClickUpTask = async (dta, list_id) => {
     var res = UrlFetchApp.fetch(url, params);
     var data = JSON.parse(res.getContentText());
     var header = JSON.parse(res.getResponseCode());
-    console.log(res, header, data)
     switch (header) {
       case 404 || 500:
         Logger.log('Task creation failed')
+        break;
       default:
-        await createTimeEntry(data.id, dta)
+        await createTimeEntry(data.id, dta, space)
     }
   } else {
     Logger.log(`${dta.taskName} looks created already.`)
-    await createTimeEntry(didTaskCreated.task, dta, didTaskCreated)
+    await createTimeEntry(didTaskCreated.task, dta, didTaskCreated.space)
   }
 
 }
 
 
-const createTimeEntry = async (taskID, dta, didTaskCreated = {}) => {
-  var spaceRelatedTeamID = CLICKUP_TEAMID_MECL // base
-
-  if (didTaskCreated.space) {
-    switch (didTaskCreated.space) {
-      case "LS":
-        Loggler.log("Team ID settled as LS")
-        spaceRelatedTeamID = CLICKUP_TEAMID_LS
-        break;
-      default:
-        Loggler.log("Team ID settled as MECL")
-        spaceRelatedTeamID = CLICKUP_TEAMID_MECL
-    }
-  }
-  var url = `https://api.clickup.com/api/v2/team/${spaceRelatedTeamID}/time_entries`
+const createTimeEntry = async (taskID, dta, space = 'MECL') => {
+  // define team id according to the space that we retreived from the task
+  var teamID = space != 'LS' ? CLICKUP_TEAMID_MECL : CLICKUP_TEAMID_LS
+  
+  var url = `https://api.clickup.com/api/v2/team/${teamID}/time_entries`
   var payload = {
     "description": dta.time_log_note,
     "start": dta.dateEpoch * 1000,
@@ -185,7 +176,7 @@ const createTimeEntry = async (taskID, dta, didTaskCreated = {}) => {
     }, "payload": JSON.stringify(payload)
   };
 
-  var res = await UrlFetchApp.fetch(url, params);
+  var res = UrlFetchApp.fetch(url, params);
   var data = JSON.parse(res.getResponseCode());
   switch (data) {
     case 200:
@@ -224,14 +215,18 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
   }
 }
 
+
 const pushToArchive = () => {
+  var date = new Date()
+  var formatted = `${date.getMonth()}/${date.getDay()}/${date.getFullYear()}`;
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
   var resultRows = sheet.getLastRow();
   var range = sheet.getDataRange();
   var headers = sheet.getRange(`A1:N1`).getValues();
   for (var i = 2; i <= resultRows; i++) {
-    var rowValues = sheet.getRange(`A${i}:N${i}`).getValues();
-    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
+    var rowValues = sheet.getRange(`A${i}:L${i}`).getValues();
+    rowValues[0].push(formatted)
+    Logger.log(`${rawRowValues[0][1]} record pushed to Archive`)
     SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
   }
   Logger.log(`All records pushed to archive`)
@@ -254,6 +249,12 @@ const titleController = async (title) => {
       data = {
         "type": "PERSONAL",
         "relations": "LS MINSK"
+      }
+      break;
+    case /ls/.test(title):
+      data = {
+        "type": "WORK",
+        "relations": "LS"
       }
       break;
     case /mestores/.test(title):
