@@ -14,8 +14,7 @@ const API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const TODAY = new Date()
 
 const onOpen = () => {
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('PageSpeed Menu')
+  SpreadsheetApp.getUi().createMenu('PageSpeed Menu')
     .addItem('🚀  -  Start Testing', 'wrapper')
     .addToUi();
 }
