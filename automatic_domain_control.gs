@@ -74,7 +74,7 @@ const purgeOldDomainsFromSheet = async (sheet) => {
   SpreadsheetApp.getActive().getSheetByName(sheet).getRange('A2:C').clearContent();
 }
 
-const sendMsgToSlack = async (domain) => {
+const sendMsgToSlack = (domain) => {
   var payload = {
     "blocks": [
       {
@@ -105,5 +105,5 @@ const sendMsgToSlack = async (domain) => {
     },
     "payload": JSON.stringify(payload)
   };
-  await UrlFetchApp.fetch(HOOK, options);
+  UrlFetchApp.fetch(HOOK, options);
 }
