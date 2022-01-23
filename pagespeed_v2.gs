@@ -82,8 +82,7 @@ const getLighthouseResults = async (url, strategy, keyData) => {
       }
     // Append all Metrics to the Log sheet.
     SpreadsheetApp.getActive().getSheetByName('Log').appendRow([ltMetrics]);
-    Logger.log(`Slack notification sent for ${ltMetrics}`);
-    await slackNotifier(ltMetrics, keyData);
+    slackNotifier(ltMetrics, keyData);
   } else {
     Logger.log('Something went wrong!');
   }
@@ -91,7 +90,7 @@ const getLighthouseResults = async (url, strategy, keyData) => {
 }
 
 
-const slackNotifier = async (metrics, keyData) => {
+const slackNotifier = (metrics, keyData) => {
   var payload = {
     "blocks": [
       {
@@ -210,7 +209,8 @@ const slackNotifier = async (metrics, keyData) => {
     },
     "payload": JSON.stringify(payload)
   };
-  await UrlFetchApp.fetch(keyData.slack_hook, options);
+  UrlFetchApp.fetch(keyData.slack_hook, options);
+  Logger.log(`Slack notification sent`);
 }
 
 const iconHelper = async (value) => {
