@@ -81,26 +81,7 @@ const getLighthouseResults = async (url, strategy, keyData) => {
         'today': `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`
       }
     // Append all Metrics to the Log sheet.
-    SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
-      [
-        ltMetrics.strategy, 
-        ltMetrics.url, 
-        ltMetrics.performance, 
-        ltMetrics.accessibility, 
-        ltMetrics.bestPractices, 
-        ltMetrics.seo, 
-        ltMetrics.firstContentfulPaint, 
-        ltMetrics.speedIndex, 
-        ltMetrics.totalBlockingTime, 
-        ltMetrics.firstMeaningfulPaint, 
-        ltMetrics.cumulativeLayoutShift, 
-        ltMetrics.largestContentfulPaint, 
-        ltMetrics.interactive,
-        ltMetrics.domain,
-        ltMetrics.identifier,
-        ltMetrics.today
-      ],
-    );
+    SpreadsheetApp.getActive().getSheetByName('Log').appendRow([ltMetrics]);
     Logger.log(`Slack notification sent for ${ltMetrics}`);
     await slackNotifier(ltMetrics, keyData);
   } else {
