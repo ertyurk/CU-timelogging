@@ -7,6 +7,9 @@ const TARGET_ORDER_STATUS = SHEET.getRange("C9:C9").getValue()
 const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C10:C10").getValue()
 const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C11:C11").getValue()
 const CLICKUP_LS_LISTID = SHEET.getRange("C12:C12").getValue()
+const CLICKUP_FORTUNA_LISTID = SHEET.getRange("C13:C13").getValue()
+const CLICKUP_APOLLO_LISTID = SHEET.getRange("C14:C14").getValue()
+const SLACK_HOOK = SHEET.getRange("C18:C18").getValue()
 
 const onOpen = () => {
   SpreadsheetApp.getUi().createMenu('Event menu')
@@ -40,6 +43,14 @@ const entryController = async () => {
         var today = new Date().getTime() / 1000;
         if (today > taskStartDate) {
           switch (dta.relations) {
+            case ('APOLLO'):
+              Logger.log(`Apollo case => ${dta.taskName}`)
+              createClickUpTask(dta, CLICKUP_APOLLO_LISTID)
+              break;
+            case ('FORTUNA'):
+              Logger.log(`Fortuna case => ${dta.taskName}`)
+              createClickUpTask(dta, CLICKUP_FORTUNA_LISTID)
+              break;
             case ('MESTORES'):
               Logger.log(`Mestores case => ${dta.taskName}`)
               createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
@@ -111,6 +122,7 @@ const cpMeetFromCalToSheet = async () => {
   }
 }
 
+// review this for fortuna + apollo
 const createClickUpTask = async (dta, list_id, space = 'MECL') => {
   didTaskCreated = await isTaskCreated(dta.taskName)
   if (didTaskCreated.status == false || dta.time_log_status == "AUTH") {
@@ -151,11 +163,11 @@ const createClickUpTask = async (dta, list_id, space = 'MECL') => {
 
 }
 
-
+// review this for fortuna + apollo
 const createTimeEntry = async (taskID, dta, space = 'MECL') => {
   // define team id according to the space that we retreived from the task
   var teamID = space != 'LS' ? CLICKUP_TEAMID_MECL : CLICKUP_TEAMID_LS
-  
+
   var url = `https://api.clickup.com/api/v2/team/${teamID}/time_entries`
   var payload = {
     "description": dta.time_log_note,
@@ -217,23 +229,67 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
 
 
 const pushToArchive = () => {
+  let total;
   var date = new Date()
-  var formatted = `${date.getMonth()}/${date.getDay()}/${date.getFullYear()}`;
+  var formatted = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
   var resultRows = sheet.getLastRow();
   var range = sheet.getDataRange();
   var headers = sheet.getRange(`A1:N1`).getValues();
   for (var i = 2; i <= resultRows; i++) {
     var rowValues = sheet.getRange(`A${i}:L${i}`).getValues();
+
     rowValues[0].push(formatted)
-    Logger.log(`${rawRowValues[0][1]} record pushed to Archive`)
+    // setting total if the loggin succeeded
+    if (rowValues[0][8] == 'Success') {
+      total = total + rowValues[0][7] / 3600000
+    }
+
+    rowValues[0][7] = `${rowValues[0][7] / 3600000} hr`; // covert ms to hrs
+    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
     SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
   }
   Logger.log(`All records pushed to archive`)
   range.clearContent();
   SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
+  slackNotifier(formatted, total)
   Logger.log(`Entries sheet cleared!`)
 }
+
+
+const slackNotifier = (date, total) => {
+
+  let text;
+  if (total > 0) {
+    text = `Total Logged for ${date} is *${total}* hrs`
+  } else {
+    text = `No logging for today`
+  }
+
+  var payload = {
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": text
+        }
+      }
+    ]
+  }
+
+  var options = {
+    "method": "post",
+    "headers": {
+      "Content-type": "application/json",
+    },
+    "payload": JSON.stringify(payload)
+  };
+  UrlFetchApp.fetch(SLACK_HOOK, options);
+  Logger.log(`Slack notified as ${total} for ${date}`)
+}
+
+
 
 const titleController = async (title) => {
 
@@ -245,6 +301,18 @@ const titleController = async (title) => {
 
   let data;
   switch (true) {
+    case /apollo/.test(title):
+      data = {
+        "type": "WORK",
+        "relations": "APOLLO"
+      }
+      break;
+    case /fortuna/.test(title):
+      data = {
+        "type": "WORK",
+        "relations": "FORTUNA"
+      }
+      break;
     case /ls minsk/.test(title):
       data = {
         "type": "PERSONAL",
@@ -326,3 +394,4 @@ const isTaskCreated = async (text) => {
   }
 
 }
+
