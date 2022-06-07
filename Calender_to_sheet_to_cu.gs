@@ -100,8 +100,6 @@ const cpMeetFromCalToSheet = async () => {
     if (events[i].getMyStatus() == "MAYBE") continue;
     
     var rel_data = await titleController(events[i].getTitle().toLowerCase());
-    
-    
 
     // if the meeting is recurring, i am not checking meeting UDID for passing it
     var _initialResult = await findRowByMeetingId(events[i].getId())
@@ -186,13 +184,11 @@ const createTimeEntry = async (taskID, dta, space = 'MECL') => {
       case 'MECL':
         return CLICKUP_TEAMID_MECL;
       default:
-        return CLICKUP_TEAMID_MECL;
+        return CLICKUP_TEAMID_LS;
     }
   }
 
   var teamID = await teamIdHelper(space)
-
-  
 
   var url = `https://api.clickup.com/api/v2/team/${teamID}/time_entries`
   var payload = {
@@ -240,8 +236,10 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
   try {
     var sheet = SpreadsheetApp.getActive().getSheetByName('entries');
     var indexById = sheet.createTextFinder(id).findNext().getRowIndex();
-    timeLogStatus ? sheet.getRange(`I${indexById}`).setValue(timeLogStatus) : '';
-    taskID ? sheet.getRange(`L${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`) : '';
+
+    if (timeLogStatus) sheet.getRange(`I${indexById}`).setValue(timeLogStatus)
+    if (taskID) sheet.getRange(`L${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`)
+    
     return {
       "status": true
     }
@@ -263,12 +261,10 @@ const pushToArchive = () => {
   var headers = sheet.getRange(`A1:N1`).getValues();
   for (var i = 2; i <= resultRows; i++) {
     var rowValues = sheet.getRange(`A${i}:L${i}`).getValues();
-
     rowValues[0].push(formatted)
+
     // setting total if the logging succeeded
     var hrs = rowValues[0][7] / 3600000
-
-    Logger.log(rowValues[0][8])
     if (rowValues[0][8] == 'Success') {
       total = total + hrs
     }
@@ -305,21 +301,18 @@ const slackNotifier = (total) => {
     ]
   }
 
-  var options = {
+  UrlFetchApp.fetch(SLACK_HOOK, {
     "method": "post",
     "headers": {
       "Content-type": "application/json",
     },
     "payload": JSON.stringify(payload)
-  };
-  UrlFetchApp.fetch(SLACK_HOOK, options);
-  Logger.log(`Slack notified as ${total}`)
+  });
 }
 
 
 
 const titleController = async (title) => {
-
   let data;
   switch (true) {
     case /dca/.test(title):
@@ -428,4 +421,3 @@ const isTaskCreated = async (text) => {
   }
 
 }
-
