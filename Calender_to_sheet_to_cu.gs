@@ -9,6 +9,7 @@ const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C11:C11").getValue()
 const CLICKUP_LS_LISTID = SHEET.getRange("C12:C12").getValue()
 const CLICKUP_FORTUNA_LISTID = SHEET.getRange("C13:C13").getValue()
 const CLICKUP_APOLLO_LISTID = SHEET.getRange("C14:C14").getValue()
+const CLICKUP_DCA_LISTID = SHEET.getRange("C15:C15").getValue()
 const SLACK_HOOK = SHEET.getRange("C18:C18").getValue()
 
 const onOpen = () => {
@@ -59,6 +60,10 @@ const entryController = async () => {
               Logger.log(`La3eb case => ${dta.taskName}`)
               createClickUpTask(dta, CLICKUP_TASKFORCE_LIST_ID)
               break;
+            case ('DCA'):
+              Logger.log(`DCA case => ${dta.taskName}`)
+              createClickUpTask(dta, CLICKUP_DCA_LISTID)
+              break;
             case ('LS MINSK'):
               Logger.log('LS MINSK')
               break;
@@ -87,12 +92,26 @@ const cpMeetFromCalToSheet = async () => {
   var events = CalendarApp.getDefaultCalendar().getEventsForDay(today);
   Logger.log('Number of events: ' + events.length);
   for (var i = 0; i < events.length; i++) {
-    var rel_data = await titleController(events[i].getTitle().toLowerCase());
     var duration = (new Date(events[i].getEndTime()).getTime()) - (new Date(events[i].getStartTime()).getTime())
+    
+    // check whether i am out of office
+    if (events[i].getTitle().toLowerCase().includes("ooo")) continue;
+    // if meeting status is "MAYBE" then pass the meeting record
+    if (events[i].getMyStatus() == "MAYBE") continue;
+    
+    var rel_data = await titleController(events[i].getTitle().toLowerCase());
+    
+    
+
     // if the meeting is recurring, i am not checking meeting UDID for passing it
-    var _findRowByMeetingIdResult = await findRowByMeetingId(events[i].getId())
-    let findRowByMeetingIdResult = false
-    await events[i].isRecurringEvent() == true ? (Logger.log(`${events[i].getTitle()} is recurring meeting.`)) : (findRowByMeetingIdResult = _findRowByMeetingIdResult.status)
+    var _initialResult = await findRowByMeetingId(events[i].getId())
+    let final;
+    if (events[i].isRecurringEvent() == false) { 
+      final = _initialResult.status 
+    } else {
+      final = false
+    }
+    
     var result = [
       events[i].getId(),
       events[i].getTitle(), // event title
@@ -107,17 +126,8 @@ const cpMeetFromCalToSheet = async () => {
       `${events[i].getTitle()} - Automated Timelog Note`,
     ];
 
-    // check whether duration time is equals to Basic Out of office timeline
-    switch (duration) {
-      case 28800000:
-        Logger.log(`Passed values => ${result}`)
-        break;
-      case 14400000:
-        Logger.log(`Passed values => ${result}`)
-        break;
-      default:
-        findRowByMeetingIdResult == false
-          ? SpreadsheetApp.getActive().getSheetByName('entries').appendRow(result) : ''
+    if (final == false) {
+      SpreadsheetApp.getActive().getSheetByName('entries').appendRow(result)
     }
   }
 }
@@ -166,7 +176,23 @@ const createClickUpTask = async (dta, list_id, space = 'MECL') => {
 // review this for fortuna + apollo
 const createTimeEntry = async (taskID, dta, space = 'MECL') => {
   // define team id according to the space that we retreived from the task
-  var teamID = space != 'LS' ? CLICKUP_TEAMID_MECL : CLICKUP_TEAMID_LS
+  
+  const teamIdHelper = async (space) => {
+    switch (space) {
+      case 'LS':
+        return CLICKUP_TEAMID_LS;
+      case 'DCA':
+        return CLICKUP_TEAMID_LS;
+      case 'MECL':
+        return CLICKUP_TEAMID_MECL;
+      default:
+        return CLICKUP_TEAMID_MECL;
+    }
+  }
+
+  var teamID = await teamIdHelper(space)
+
+  
 
   var url = `https://api.clickup.com/api/v2/team/${teamID}/time_entries`
   var payload = {
@@ -227,9 +253,8 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
   }
 }
 
-
 const pushToArchive = () => {
-  let total;
+  var total = 0;
   var date = new Date()
   var formatted = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
@@ -240,28 +265,30 @@ const pushToArchive = () => {
     var rowValues = sheet.getRange(`A${i}:L${i}`).getValues();
 
     rowValues[0].push(formatted)
-    // setting total if the loggin succeeded
+    // setting total if the logging succeeded
+    var hrs = rowValues[0][7] / 3600000
+
+    Logger.log(rowValues[0][8])
     if (rowValues[0][8] == 'Success') {
-      total = total + rowValues[0][7] / 3600000
+      total = total + hrs
     }
 
-    rowValues[0][7] = `${rowValues[0][7] / 3600000} hr`; // covert ms to hrs
+    rowValues[0][7] = hrs; // covert ms to hrs
     Logger.log(`${rowValues[0][1]} record pushed to Archive`)
     SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
   }
   Logger.log(`All records pushed to archive`)
   range.clearContent();
   SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
-  slackNotifier(formatted, total)
+  slackNotifier(total)
   Logger.log(`Entries sheet cleared!`)
 }
 
 
-const slackNotifier = (date, total) => {
-
+const slackNotifier = (total) => {
   let text;
   if (total > 0) {
-    text = `Total Logged for ${date} is *${total}* hrs`
+    text = `Total Logged for yesterday is *${total.toString().slice(0,6)}* hrs`
   } else {
     text = `No logging for today`
   }
@@ -286,27 +313,27 @@ const slackNotifier = (date, total) => {
     "payload": JSON.stringify(payload)
   };
   UrlFetchApp.fetch(SLACK_HOOK, options);
-  Logger.log(`Slack notified as ${total} for ${date}`)
+  Logger.log(`Slack notified as ${total}`)
 }
 
 
 
 const titleController = async (title) => {
 
-  /*
-    Reference:
-    relations = ['LS MINSK', 'MINSK', 'LEANSCALE', , 'LA3EB', 'MESTORES'];
-    type = ['PERSONAL', 'WORK']
-  */
-
   let data;
   switch (true) {
-    case /apollo/.test(title):
+    case /dca/.test(title):
       data = {
         "type": "WORK",
-        "relations": "APOLLO"
+        "relations": "DCA"
       }
       break;
+    case /apollo/.test(title):
+    data = {
+      "type": "WORK",
+      "relations": "APOLLO"
+    }
+    break;
     case /fortuna/.test(title):
       data = {
         "type": "WORK",
@@ -323,6 +350,12 @@ const titleController = async (title) => {
       data = {
         "type": "WORK",
         "relations": "LS"
+      }
+      break;
+    case /la3eb/.test(title):
+      data = {
+        "type": "WORK",
+        "relations": "LA3EB"
       }
       break;
     case /mestores/.test(title):
@@ -343,12 +376,7 @@ const titleController = async (title) => {
         "relations": "MESTORES"
       }
       break;
-    case /ooo/.test(title):
-      data = {
-        "type": "PERSONAL",
-        "relations": "AWAY"
-      }
-      break;
+    
     case /paperwork/.test(title):
       data = {
         "type": "PERSONAL",
@@ -361,10 +389,16 @@ const titleController = async (title) => {
         "relations": "LEANSCALE"
       }
       break;
+    case /ooo/.test(title):
+      data = {
+        "type": "PERSONAL",
+        "relations": "AWAY"
+      }
+      break;
     default:
       data = {
         "type": "WORK",
-        "relations": "MESTORES"
+        "relations": "LS"
       }
   }
 
