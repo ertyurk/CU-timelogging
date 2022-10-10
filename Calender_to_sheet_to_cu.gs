@@ -47,7 +47,7 @@ const CONFIG = async() =>{
 };
 
 /*Copy to Code.gs*/
-const SLACK_HOOK = "https://hooks.slack.com/services/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";
+const SLACK_HOOK = "<Slack webhook here>";
 
 const onOpen = () => {
   SpreadsheetApp.getUi().createMenu('Event menu')
