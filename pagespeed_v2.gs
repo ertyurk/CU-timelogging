@@ -14,7 +14,8 @@ const API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const TODAY = new Date()
 
 const onOpen = () => {
-  SpreadsheetApp.getUi().createMenu('PageSpeed Menu')
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('PageSpeed Menu')
     .addItem('🚀  -  Start Testing', 'wrapper')
     .addToUi();
 }
@@ -34,6 +35,7 @@ const wrapper = async () => {
   }
 }
 
+
 const testRunner = async (data) => {
   ['mobile', 'desktop'].forEach(async (strategy) => {
     await getURLsFromSheet(strategy, data);
@@ -46,7 +48,7 @@ const getURLsFromSheet = async (strategy, keyData) => {
   for (var i = 2; i <= rows; i++) {
     var url = activeSheet.getRange(i, 2).getValue();
     if (url.match(keyData.domain)) {
-      console.log(keyData.domain, strategy, url)
+      //console.log(keyData.domain, strategy, url)
       await getLighthouseResults(url, strategy, keyData)
     }
   }
@@ -54,10 +56,11 @@ const getURLsFromSheet = async (strategy, keyData) => {
 
 
 const getLighthouseResults = async (url, strategy, keyData) => {
-
   const serviceUrl = `${API_URL}?url=${url}&key=${keyData.api_key}&strategy=${strategy}&category=ACCESSIBILITY&category=BEST_PRACTICES&category=PERFORMANCE&category=PWA&category=SEO`
   var res = UrlFetchApp.fetch(serviceUrl);
+  Logger.log(res)
   var data = JSON.parse(res.getContentText());
+  Logger.log(data)
   var header = JSON.parse(res.getResponseCode());
   if (header != 404 || 500) {
     Logger.log(`Result retrieved for ${serviceUrl} with ${strategy} strategy.`);
@@ -81,8 +84,28 @@ const getLighthouseResults = async (url, strategy, keyData) => {
         'today': `${TODAY.getFullYear()}/${TODAY.getMonth() + 1}/${TODAY.getDate()}`
       }
     // Append all Metrics to the Log sheet.
-    SpreadsheetApp.getActive().getSheetByName('Log').appendRow([ltMetrics]);
-    slackNotifier(ltMetrics, keyData);
+    SpreadsheetApp.getActive().getSheetByName('Log').appendRow(
+      [
+        ltMetrics.strategy, 
+        ltMetrics.url, 
+        ltMetrics.performance, 
+        ltMetrics.accessibility, 
+        ltMetrics.bestPractices, 
+        ltMetrics.seo, 
+        ltMetrics.firstContentfulPaint, 
+        ltMetrics.speedIndex, 
+        ltMetrics.totalBlockingTime, 
+        ltMetrics.firstMeaningfulPaint, 
+        ltMetrics.cumulativeLayoutShift, 
+        ltMetrics.largestContentfulPaint, 
+        ltMetrics.interactive,
+        ltMetrics.domain,
+        ltMetrics.identifier,
+        ltMetrics.today
+      ],
+    );
+    Logger.log(`Slack notification sent for ${ltMetrics.url}`);
+    await slackNotifier(ltMetrics, keyData);
   } else {
     Logger.log('Something went wrong!');
   }
@@ -90,7 +113,7 @@ const getLighthouseResults = async (url, strategy, keyData) => {
 }
 
 
-const slackNotifier = (metrics, keyData) => {
+const slackNotifier = async (metrics, keyData) => {
   var payload = {
     "blocks": [
       {
@@ -210,7 +233,6 @@ const slackNotifier = (metrics, keyData) => {
     "payload": JSON.stringify(payload)
   };
   UrlFetchApp.fetch(keyData.slack_hook, options);
-  Logger.log(`Slack notification sent`);
 }
 
 const iconHelper = async (value) => {
