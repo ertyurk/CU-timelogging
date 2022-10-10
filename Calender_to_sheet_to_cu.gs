@@ -1,203 +1,145 @@
-const SHEET = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
-const CLICKUP_KEY = SHEET.getRange("C5:C5").getValue()
-const CLICKUP_USER = SHEET.getRange("C6:C6").getValue()
-const CLICKUP_TEAMID_MECL = SHEET.getRange("C7:C7").getValue()
-const CLICKUP_TEAMID_LS = SHEET.getRange("C8:C8").getValue()
-const TARGET_ORDER_STATUS = SHEET.getRange("C9:C9").getValue()
-const CLICKUP_TASKFORCE_LIST_ID = SHEET.getRange("C10:C10").getValue()
-const CLICKUP_MESTORES_LIST_ID = SHEET.getRange("C11:C11").getValue()
-const CLICKUP_LS_LISTID = SHEET.getRange("C12:C12").getValue()
-const CLICKUP_FORTUNA_LISTID = SHEET.getRange("C13:C13").getValue()
-const CLICKUP_APOLLO_LISTID = SHEET.getRange("C14:C14").getValue()
-const CLICKUP_DCA_LISTID = SHEET.getRange("C15:C15").getValue()
-const SLACK_HOOK = SHEET.getRange("C18:C18").getValue()
+/*
+  1. Create a google sheet with 3 pages
+    1. config
+      Headers: Name,	Clickup Api Key,	User ID,	Team ID,	List ID,	Target Task Status,	Keywords (comma seperated keywords)
+    2. entries
+      Headers: Name,	Description,	Relation,	Start,	End,	Epoch,	Hrs,	Status,	Tag,	Log Note,	Task,	UDID,			
+    3. archive
+      Headers: Name,	Description,	Relation,	Start,	End,	Epoch,	Hrs,	Status,	Tag,	Log Note,	Task,	UDID,	
+
+  2. Put related config to the "config" sheet from A2 cell.
+  
+  3. Go to the Extensions > Google Apps Script
+  4. Add a file as "CONFIG.gs" and copy following code.
+  5. Copy the remaining code to the Code.gs
+  
+*/
+
+
+
+/*Copy to CONFIG.gs*/
+
+const CONFIG = async() =>{ 
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
+  const lastRow = sheet.getLastRow();
+  const final = [];
+  for (let i = 2; i <= lastRow; i++) {
+    const configs = sheet.getRange(`A${i}:G${i}`).getValues();
+
+    for (const config of configs) {
+      
+      let data = {
+        name: config[0],
+        clickupApiKey: config[1],
+        userId: config[2].toString(),
+        team_id: config[3].toString(),
+        list: config[4].toString(),
+        taskStatus: config[5],
+        keywords: config[6].split(","),
+      };
+
+      final.push(data);
+
+    };
+  };
+  
+  return final;
+};
+
+/*Copy to Code.gs*/
+const SLACK_HOOK = "https://hooks.slack.com/services/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";
 
 const onOpen = () => {
   SpreadsheetApp.getUi().createMenu('Event menu')
-    .addItem('🗓️  -  Retrieve meetings', 'cpMeetFromCalToSheet')
-    .addItem('🚀  -  Push to Clickup', 'entryController')
-    .addItem('🗄️  -  Push to Archive', 'pushToArchive')
+    .addItem('🗓️  -  Retrieve meetings', 'getMeetings')
+    .addItem('🚀  -  Push to Clickup', 'recordHandler')
+    .addItem('🗄️  -  Archive entries', 'archive')
     .addToUi();
 }
 
-const entryController = async () => {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
-  var resultRows = sheet.getLastRow();
-  for (var i = 2; i <= resultRows; i++) {
-    var rowValues = sheet.getRange(`A${i}:K${i}`).getValues();
-    rowValues.forEach(cell => {
-      if (cell[8] == 'AUTH' || cell[8] == 'Pending' && cell[4] == "WORK" || cell[3] == "AWAY") {
-        var taskStartDate = new Date(cell[5]).getTime() / 1000;
-
-        var dta = {
-          "taskName": cell[1],
-          "taskDescription": cell[2],
-          "duration": cell[7],
-          "dateEpoch": taskStartDate,
-          "UDID": cell[0],
-          "relations": cell[3],
-          "tag": cell[9],
-          'time_log_note': cell[10],
-          'time_log_status': cell[8]
+const recordHandler = async () => {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
+  const lastRow = sheet.getLastRow();
+  for (var i = 2; i <= lastRow; i++) {
+    const meetings = sheet.getRange(`A${i}:M${i}`).getValues();
+    for (meeting of meetings) {
+      if (meeting[7] != 'Success') {
+        var data = {
+          task_name: meeting[0],
+          description: meeting[1],
+          duration: meeting[5],
+          duration_hrs: meeting[6],
+          start_date: meeting[3].getTime() / 1000,
+          relation: meeting[2],
+          tag: meeting[8],
+          time_log_note: meeting[9],
+          time_log_status: meeting[7],
+          udid: meeting[11]
         }
 
-        var today = new Date().getTime() / 1000;
-        if (today > taskStartDate) {
-          switch (dta.relations) {
-            case ('APOLLO'):
-              Logger.log(`Apollo case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_APOLLO_LISTID)
-              break;
-            case ('FORTUNA'):
-              Logger.log(`Fortuna case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_FORTUNA_LISTID)
-              break;
-            case ('MESTORES'):
-              Logger.log(`Mestores case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
-              break;
-            case ('LA3EB'):
-              Logger.log(`La3eb case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_TASKFORCE_LIST_ID)
-              break;
-            case ('DCA'):
-              Logger.log(`DCA case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_DCA_LISTID)
-              break;
-            case ('LS MINSK'):
-              Logger.log('LS MINSK')
-              break;
-            case ('AWAY'):
-              Logger.log('Away')
-              findRowByMeetingId(dta.UDID, 'Passed')
-              break;
-            case ('LS'):
-              Logger.log(`Leanscale case => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_LS_LISTID, 'LS')
-              break;
-            default:
-              Logger.log(`Default case here => ${dta.taskName}`)
-              createClickUpTask(dta, CLICKUP_MESTORES_LIST_ID)
-          }
+        const cfg = await getConfig(data.relation);
+        const is_created = await isTaskCreated(data.task_name, data.description);
+        if (is_created.status == true) {
+          await timeEntry(data, cfg, is_created.task);
         } else {
-          Logger.log(`Task did not finish yet.`)
+          await createTask(data, cfg);
         }
+        
       }
-    });
-  }
-}
-
-const cpMeetFromCalToSheet = async () => {
-  var today = new Date();
-  var events = CalendarApp.getDefaultCalendar().getEventsForDay(today);
-  Logger.log('Number of events: ' + events.length);
-  for (var i = 0; i < events.length; i++) {
-    var duration = (new Date(events[i].getEndTime()).getTime()) - (new Date(events[i].getStartTime()).getTime())
-    
-    // check whether i am out of office
-    if (events[i].getTitle().toLowerCase().includes("ooo")) continue;
-    // if meeting status is "MAYBE" then pass the meeting record
-    if (events[i].getMyStatus() == "MAYBE") continue;
-    
-    var rel_data = await titleController(events[i].getTitle().toLowerCase());
-
-    // if the meeting is recurring, i am not checking meeting UDID for passing it
-    var _initialResult = await findRowByMeetingId(events[i].getId())
-    let final;
-    if (events[i].isRecurringEvent() == false) { 
-      final = _initialResult.status 
-    } else {
-      final = false
-    }
-    
-    var result = [
-      events[i].getId(),
-      events[i].getTitle(), // event title
-      events[i].getDescription(), // event desc
-      rel_data.relations, // relations
-      rel_data.type, // type
-      events[i].getStartTime(),
-      events[i].getEndTime(),
-      duration, // duration
-      'Pending', // initial status
-      `Automated Timelog`,
-      `${events[i].getTitle()} - Automated Timelog Note`,
-    ];
-
-    if (final == false) {
-      SpreadsheetApp.getActive().getSheetByName('entries').appendRow(result)
     }
   }
 }
 
-// review this for fortuna + apollo
-const createClickUpTask = async (dta, list_id, space = 'MECL') => {
-  didTaskCreated = await isTaskCreated(dta.taskName)
-  if (didTaskCreated.status == false || dta.time_log_status == "AUTH") {
-    // create the task
-    Logger.log(`${dta.taskName} will be created for the timelog as CLOSED`)
-    var url = `https://api.clickup.com/api/v2/list/${list_id}/task`
-    var payload = {
-      "name": dta.taskName,
-      "description": dta.taskDescription,
-      "tags": [dta.tag],
-      "status": TARGET_ORDER_STATUS
+const createTask = async (data, cfg) => {
+  try {
+    let url = `https://api.clickup.com/api/v2/list/${cfg.list}/task`;
+    let payload = {
+      name: data.task_name,
+      description: data.description,
+      tags: [data.tag],
+      status: cfg.taskStatus,
     }
 
-    var params = {
-      'method': 'POST',
-      'muteHttpExceptions': true,
-      'contentType': 'application/json',
-      "headers": {
+    let params = {
+      method: 'POST',
+      muteHttpExceptions: true,
+      contentType: 'application/json',
+      headers: {
         "Content-Type": "application/json",
-        "Authorization": CLICKUP_KEY
+        "Authorization": cfg.clickupApiKey
       }, "payload": JSON.stringify(payload)
-    };
+    }
 
-    var res = UrlFetchApp.fetch(url, params);
-    var data = JSON.parse(res.getContentText());
-    var header = JSON.parse(res.getResponseCode());
+    let r = UrlFetchApp.fetch(url, params);
+    let res = JSON.parse(r.getContentText());
+    let header = JSON.parse(r.getResponseCode());
     switch (header) {
-      case 404 || 500:
+      case 300:
+      case 301:
+      case 400:
+      case 404:
+      case 500:
         Logger.log('Task creation failed')
         break;
       default:
-        await createTimeEntry(data.id, dta, space)
+        await timeEntry(data, cfg, res.id);
     }
-  } else {
-    Logger.log(`${dta.taskName} looks created already.`)
-    await createTimeEntry(didTaskCreated.task, dta, didTaskCreated.space)
-  }
 
+  } catch (e) {
+    Logger.log(e)
+  }
 }
 
-// review this for fortuna + apollo
-const createTimeEntry = async (taskID, dta, space = 'MECL') => {
-  // define team id according to the space that we retreived from the task
-  
-  const teamIdHelper = async (space) => {
-    switch (space) {
-      case 'LS':
-        return CLICKUP_TEAMID_LS;
-      case 'DCA':
-        return CLICKUP_TEAMID_LS;
-      case 'MECL':
-        return CLICKUP_TEAMID_MECL;
-      default:
-        return CLICKUP_TEAMID_LS;
-    }
-  }
+const timeEntry = async (data, cfg, taskId) => {
 
-  var teamID = await teamIdHelper(space)
-
-  var url = `https://api.clickup.com/api/v2/team/${teamID}/time_entries`
+  var url = `https://api.clickup.com/api/v2/team/${cfg.team_id}/time_entries`;
   var payload = {
-    "description": dta.time_log_note,
-    "start": dta.dateEpoch * 1000,
+    "description": data.time_log_note,
+    "start": data.start_date * 1000,
     "billable": true,
-    "duration": dta.duration,
-    "assignee": CLICKUP_USER,
-    "tid": taskID
+    "duration": data.duration,
+    "assignee": Number(cfg.userId),
+    "tid": taskId
   }
 
   var params = {
@@ -206,28 +148,79 @@ const createTimeEntry = async (taskID, dta, space = 'MECL') => {
     'contentType': 'application/json',
     "headers": {
       "Content-Type": "application/json",
-      "Authorization": CLICKUP_KEY
+      "Authorization": cfg.clickupApiKey
     }, "payload": JSON.stringify(payload)
   };
 
+
   var res = UrlFetchApp.fetch(url, params);
-  var data = JSON.parse(res.getResponseCode());
-  switch (data) {
+  var header = JSON.parse(res.getResponseCode());
+  switch (header) {
     case 200:
-      Logger.log(`Duration time entried to the Clickup for ${dta.taskName}`)
-      await findRowByMeetingId(dta.UDID, 'Success', taskID)
+      Logger.log(`Duration time entried to the Clickup for ${data.task_name}`)
+      await findRowByMeetingId(data.udid, 'Success', taskId)
       break;
     case 404 || 500:
       Logger.log('Time Entry failed')
-      await findRowByMeetingId(dta.UDID, 'Failed', taskID)
+      Logger.log(res.getContentText())
+      await findRowByMeetingId(data.udid, 'Failed', taskId)
       break;
     case 400:
       Logger.log('Access error')
-      await findRowByMeetingId(dta.UDID, 'AUTH', taskID)
+      Logger.log(res.getContentText())
+      await findRowByMeetingId(data.udid, 'AUTH', taskId)
       break;
     default:
-      Logger.log(data)
-      await findRowByMeetingId(dta.UDID, 'ERROR', taskID)
+      console.log('ERROR', res.getContentText())
+      await findRowByMeetingId(data.udid, 'ERROR', taskId)
+  }
+  
+}
+
+const getMeetings = async () => {
+  var today = new Date();
+  var events = CalendarApp.getDefaultCalendar().getEventsForDay(today);
+  Logger.log(`Total events: ${events.length} , at ${today}`);
+
+  for (let i = 0; i < events.length; i++) {
+    // adding common task ids to the title for some common meetings
+    var title = titleAdjuster(events[i].getTitle());
+    var description = events[i].getDescription();
+    var startTime = events[i].getStartTime();
+    var endTime = events[i].getEndTime();
+    var duration = new Date(endTime).getTime() - new Date(startTime).getTime();
+    var udid = events[i].getId();
+    // Check whether i am out of office 
+    // Or if meeting status is "MAYBE" 
+    // Then pass the meeting record
+    if (
+      title.toLowerCase().includes("ooo")
+      || events[i].getMyStatus() == "MAYBE"
+      || events[i].getMyStatus() == "NO"
+    ) continue;
+
+    var relations = await titleController(title);
+    if (!relations) {
+      relations = "leanscale"
+    };
+
+    var result = [
+      title,
+      description,
+      relations,
+      startTime,
+      endTime,
+      duration, // duration
+      duration / 3600000, // convert duration (ms) to hrs
+      'Pending', // initial status
+      `Automated Timelog`, // tag
+      `${title} - Automated Timelog Note`, // time_log_note
+      '0',
+      udid
+    ];
+
+    SpreadsheetApp.getActive().getSheetByName('entries').appendRow(result);
+
   }
 }
 
@@ -237,174 +230,107 @@ const findRowByMeetingId = async (id, timeLogStatus, taskID) => {
     var sheet = SpreadsheetApp.getActive().getSheetByName('entries');
     var indexById = sheet.createTextFinder(id).findNext().getRowIndex();
 
-    if (timeLogStatus) sheet.getRange(`I${indexById}`).setValue(timeLogStatus)
-    if (taskID) sheet.getRange(`L${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`)
+    if (timeLogStatus) sheet.getRange(`H${indexById}`).setValue(timeLogStatus)
+    if (taskID) sheet.getRange(`K${indexById}`).setValue(`https://app.clickup.com/t/${taskID}`)
     
     return {
       "status": true
     }
-
   } catch (err) {
+    Logger.log(err)
     return {
       "status": false
     }
   }
 }
 
-const pushToArchive = () => {
+const archive = () => {
   var total = 0;
-  var date = new Date()
-  var formatted = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("entries");
   var resultRows = sheet.getLastRow();
   var range = sheet.getDataRange();
   var headers = sheet.getRange(`A1:N1`).getValues();
   for (var i = 2; i <= resultRows; i++) {
-    var rowValues = sheet.getRange(`A${i}:L${i}`).getValues();
-    rowValues[0].push(formatted)
+    var rowValues = sheet.getRange(`A${i}:N${i}`).getValues();
+    // add up all successfull logs
+    if (rowValues[0][7] == 'Success') {
+      SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
+      total = total + rowValues[0][6]
+    } else {
+      // if log is not succeeded then keep it still in entries
+      headers.push(rowValues[0])
+    }
+  }
+  Logger.log(`Succeeded records have been pushed to archive`)
+  range.clearContent();
+  headers.forEach(row => SpreadsheetApp.getActive().getSheetByName('entries').appendRow(row))
+  notifySlack(total);
+}
 
-    // setting total if the logging succeeded
-    var hrs = rowValues[0][7] / 3600000
-    if (rowValues[0][8] == 'Success') {
-      total = total + hrs
+const notifySlack = (total) => {
+  try {
+    let text;
+    if (total > 0) {
+      text = `Total Logged for today is *${total.toString().slice(0,6)}* hrs`
+    } else {
+      text = `No logging for today`
     }
 
-    rowValues[0][7] = hrs; // covert ms to hrs
-    Logger.log(`${rowValues[0][1]} record pushed to Archive`)
-    SpreadsheetApp.getActive().getSheetByName('archive').appendRow(rowValues[0])
-  }
-  Logger.log(`All records pushed to archive`)
-  range.clearContent();
-  SpreadsheetApp.getActive().getSheetByName('entries').appendRow(headers[0])
-  slackNotifier(total)
-  Logger.log(`Entries sheet cleared!`)
-}
-
-
-const slackNotifier = (total) => {
-  let text;
-  if (total > 0) {
-    text = `Total Logged for yesterday is *${total.toString().slice(0,6)}* hrs`
-  } else {
-    text = `No logging for today`
-  }
-
-  var payload = {
-    "blocks": [
-      {
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": text
+    var payload = {
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": text
+          }
         }
-      }
-    ]
+      ]
+    }
+
+    var options = {
+      "method": "post",
+      "headers": {
+        "Content-type": "application/json",
+      },
+      "payload": JSON.stringify(payload)
+    };
+    UrlFetchApp.fetch(SLACK_HOOK, options);
+    Logger.log(`Slack notified as ${total} hrs`)
+  } catch (e) {
+    Logger.log(`Slack notification failed ${e.message}`)
   }
-
-  UrlFetchApp.fetch(SLACK_HOOK, {
-    "method": "post",
-    "headers": {
-      "Content-type": "application/json",
-    },
-    "payload": JSON.stringify(payload)
-  });
 }
-
-
 
 const titleController = async (title) => {
-  let data;
-  switch (true) {
-    case /dca/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "DCA"
-      }
-      break;
-    case /apollo/.test(title):
-    data = {
-      "type": "WORK",
-      "relations": "APOLLO"
-    }
-    break;
-    case /fortuna/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "FORTUNA"
-      }
-      break;
-    case /ls minsk/.test(title):
-      data = {
-        "type": "PERSONAL",
-        "relations": "LS MINSK"
-      }
-      break;
-    case /ls/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "LS"
-      }
-      break;
-    case /la3eb/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "LA3EB"
-      }
-      break;
-    case /mestores/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "MESTORES"
-      }
-      break;
-    case /unification/.test(title):
-      data = {
-        "type": "WORK",
-        "relations": "MESTORES"
-      }
-      break;
-    case /mu/.test(title): // shorter of mestores unification
-      data = {
-        "type": "WORK",
-        "relations": "MESTORES"
-      }
-      break;
-    
-    case /paperwork/.test(title):
-      data = {
-        "type": "PERSONAL",
-        "relations": "LS MINSK"
-      }
-      break;
-    case /side/.test(title):
-      data = {
-        "type": "PERSONAL",
-        "relations": "LEANSCALE"
-      }
-      break;
-    case /ooo/.test(title):
-      data = {
-        "type": "PERSONAL",
-        "relations": "AWAY"
-      }
-      break;
-    default:
-      data = {
-        "type": "WORK",
-        "relations": "LS"
+  let rawConfig = await CONFIG();
+  for (let project of rawConfig) {
+    for (let keyword of project.keywords)
+      if (title.toLowerCase().includes(keyword)) {
+        return project.name;
       }
   }
-
-  return data;
 }
 
-const isTaskCreated = async (text) => {
+const getConfig = async (prj) => {
+  let rawConfig = await CONFIG()
+  for (let project of rawConfig) {
+    if (prj == project.name) return project
+  }
+}
 
+const isTaskCreated = async (text, description) => {
   // Try to find Task id and space from the title with regexp
   result = /#([a-zA-Z0-9]+)-([a-zA-Z0-9]+)/.exec(text)
+
   // if there is no space, try to catch only taskid
   if (result == null) {
     result = /#([a-zA-Z0-9]+)/.exec(text)
+  }
+
+  // if there is taskId in the desc, check description for a link
+  if (result == null) {
+    result = /clickup.com\/t\/([a-zA-Z0-9-]+)/.exec(description)
   }
 
   // finally, return true or false according to the task id
@@ -419,5 +345,19 @@ const isTaskCreated = async (text) => {
       "status": false
     }
   }
-
 }
+
+// If you have common meetings to just handle them
+const titleAdjuster = (text) => {
+  text = text.toLowerCase();
+  if (text == 'devops work block ') return `${text} #123`
+  if (text == 'daily - product') return `${text} #123`;
+  if (text == 'daily') return `${text} #123`;
+  if (text == 'design') return `${text} #123`;
+  if (text == 'pm training support weekly') return `${text} #123`;
+  if (text == 'ta block') return `${text} #123`;
+  if (text == 'seller portal coding') return `${text} #123`;
+  if (text == 'accounting') return `${text} #123`;
+  return text;
+}
+
