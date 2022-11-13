@@ -24,27 +24,24 @@ const CONFIG = async() =>{
   const lastRow = sheet.getLastRow();
   const final = [];
   for (let i = 2; i <= lastRow; i++) {
-    const configs = sheet.getRange(`A${i}:G${i}`).getValues();
-
+    const configs = sheet.getRange(`A${i}:H${i}`).getValues();
     for (const config of configs) {
-      
-      let data = {
-        name: config[0],
-        clickupApiKey: config[1],
-        userId: config[2].toString(),
-        team_id: config[3].toString(),
-        list: config[4].toString(),
-        taskStatus: config[5],
-        keywords: config[6].split(","),
-      };
-
+      var data = {}
+      data.name = config[0];
+      data.clickupApiKey = config[1];
+      data.userId = config[2].toString();
+      data.team_id = config[3].toString();
+      data.list = config[4].toString();
+      data.taskStatus = config[5];
+      data.keywords = config[6].split(",");
+      if (config[7]) data.fallback = config[7];
       final.push(data);
-
     };
   };
   
   return final;
 };
+
 
 /*Copy to Code.gs*/
 const SLACK_HOOK = "<Slack webhook here>";
@@ -131,7 +128,7 @@ const createTask = async (data, cfg) => {
 }
 
 const timeEntry = async (data, cfg, taskId) => {
-
+  console.log(data, cfg, taskId)
   var url = `https://api.clickup.com/api/v2/team/${cfg.team_id}/time_entries`;
   var payload = {
     "description": data.time_log_note,
@@ -152,7 +149,7 @@ const timeEntry = async (data, cfg, taskId) => {
     }, "payload": JSON.stringify(payload)
   };
 
-
+  console.log(params)
   var res = UrlFetchApp.fetch(url, params);
   var header = JSON.parse(res.getResponseCode());
   switch (header) {
@@ -346,6 +343,7 @@ const isTaskCreated = async (text, description) => {
     }
   }
 }
+
 
 // If you have common meetings to just handle them
 const titleAdjuster = (text) => {
