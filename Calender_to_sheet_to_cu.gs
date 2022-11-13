@@ -331,17 +331,12 @@ const isTaskCreated = async (text, description) => {
   }
 
   // finally, return true or false according to the task id
-  if (result != null) {
-    return {
+  if (result == null) return { "status": false }
+  return {
       "status": true,
       "task": result[1],
       "space": result[2] ? result[2] : false
     }
-  } else {
-    return {
-      "status": false
-    }
-  }
 }
 
 
