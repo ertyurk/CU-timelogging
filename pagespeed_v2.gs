@@ -146,28 +146,28 @@ const slackNotifier = async (metrics, keyData) => {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `${await iconHelper(metrics.performance)} - Performance: *${metrics.performance}*`
+          "text": `${await iconHelper(metrics.performance)} Performance: *${metrics.performance}*`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `${await iconHelper(metrics.accessibility)} - Accessibility: *${metrics.accessibility} *`
+          "text": `${await iconHelper(metrics.accessibility)} Accessibility: *${metrics.accessibility} *`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `${await iconHelper(metrics.bestPractices)} - Best Practices: *${metrics.bestPractices}*`
+          "text": `${await iconHelper(metrics.bestPractices)} Best Practices: *${metrics.bestPractices}*`
         }
       },
       {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `${await iconHelper(metrics.seo)} - SEO: *${metrics.seo}*`
+          "text": `${await iconHelper(metrics.seo)} SEO: *${metrics.seo}*`
         }
       },
       {
@@ -185,37 +185,37 @@ const slackNotifier = async (metrics, keyData) => {
         "fields": [
           {
             "type": "plain_text",
-            "text": `First contentful Paint => ${metrics.firstContentfulPaint} s`,
+            "text": `First Contentful Paint: ${metrics.firstContentfulPaint} s`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `First Meaningful Paint => ${metrics.firstMeaningfulPaint} s`,
+            "text": `First Meaningful Paint: ${metrics.firstMeaningfulPaint} s`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `Time to Interactive => ${metrics.interactive} s`,
+            "text": `Time to Interactive: ${metrics.interactive} s`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `Speed Index => ${metrics.speedIndex} s`,
+            "text": `Speed Index: ${metrics.speedIndex} s`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `Total Blocking Time => ${metrics.totalBlockingTime} ms`,
+            "text": `Total Blocking Time: ${metrics.totalBlockingTime} ms`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `Largest Contentful Paint =>  ${metrics.largestContentfulPaint} s`,
+            "text": `Largest Contentful Paint:  ${metrics.largestContentfulPaint} s`,
             "emoji": true
           },
           {
             "type": "plain_text",
-            "text": `Cumulative Layout Shift => ${metrics.cumulativeLayoutShift}`,
+            "text": `Cumulative Layout Shift: ${metrics.cumulativeLayoutShift}`,
             "emoji": true
           }
         ]
@@ -250,13 +250,13 @@ const iconHelper = async (value) => {
 const pageIdentifierHelper = async (url) => {
   let state;
   switch (true) {
-    case /-p-/.test(url):
+    case /products\//.test(url): // set up to your URL pattern
       state = 'PDP'
       break;
-    case /-c-/.test(url):
+    case /products/.test(url): // set up to your URL pattern
       state = 'PLP'
       break;
-    default:
+    default: 
       state = 'LP'
   }
   return state;
